@@ -1,0 +1,51 @@
+{
+  "name": "qrg-market",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.26.0",
+  "engines": {
+    "node": ">=24.20.0 <25",
+    "pnpm": "11.26.0"
+  },
+  "scripts": {
+    "test:admin-control": "pnpm --filter @qrg/api test:admin-control",
+    "admin:bootstrap": "pnpm --filter @qrg/api admin:bootstrap",
+    "test:operations": "pnpm --filter @qrg/api test:operations",
+    "test:analytics": "pnpm --filter @qrg/api test:analytics",
+    "test:payments": "pnpm --filter @qrg/api test:payments",
+    "test:subscriptions": "pnpm --filter @qrg/api test:subscriptions",
+    "test:subscriptions:smoke": "node scripts/subscriptions-smoke.mjs",
+    "billing:tick": "pnpm --filter @qrg/api billing:tick",
+    "admin:provision": "pnpm --filter @qrg/api admin:provision",
+    "test:admin": "pnpm --filter @qrg/api test:admin",
+    "test:admin:smoke": "node scripts/admin-smoke.mjs",
+    "test:requests": "pnpm --filter @qrg/api test:requests",
+    "test:requests:smoke": "node scripts/requests-smoke.mjs",
+    "test:seller:smoke": "node scripts/seller-smoke.mjs",
+    "test:media": "pnpm --filter @qrg/api test:media",
+    "dev": "pnpm -r --parallel dev",
+    "media:cleanup": "pnpm --filter @qrg/api media:cleanup",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint && prettier --check .",
+    "format": "prettier --write .",
+    "test": "pnpm -r --if-present test",
+    "test:web:preview": "node --test scripts/web-preview.test.mjs",
+    "test:catalog:smoke": "node scripts/catalogue-smoke.mjs",
+    "test:critical": "pnpm test",
+    "test:db": "pnpm --filter @qrg/api test:db",
+    "db:generate": "pnpm --filter @qrg/api db:generate",
+    "db:migrate": "pnpm --filter @qrg/api db:migrate",
+    "db:cleanup": "pnpm --filter @qrg/api db:cleanup",
+    "test:smoke": "node --test scripts/production-smoke.test.mjs",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "eslint": "10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0"
+  }
+}

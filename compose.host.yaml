@@ -1,0 +1,8 @@
+# Optional host development access; never use this override in production.
+services:
+  db:
+    ports: ['127.0.0.1:5432:5432']
+networks:
+  database:
+    # Docker Engine does not publish ports for an internal-only network.
+    internal: false

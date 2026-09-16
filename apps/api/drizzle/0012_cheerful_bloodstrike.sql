@@ -1,0 +1,2 @@
+ALTER TABLE "moderation_history" DROP CONSTRAINT "moderation_action_valid";--> statement-breakpoint
+ALTER TABLE "moderation_history" ADD CONSTRAINT "moderation_action_valid" CHECK ("moderation_history"."action" IN ('SUBMIT','APPROVE','REQUEST_CHANGES','REJECT','SUSPEND','RESTORE'));

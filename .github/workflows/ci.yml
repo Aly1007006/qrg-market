@@ -1,0 +1,66 @@
+name: Quality gate
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://qrg_local:local-only-change-me@127.0.0.1:5432/qrg_market_test
+      DATABASE_SSL: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.26.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - name: Start disposable PostgreSQL with PostGIS and pg_trgm
+        run: docker compose --env-file .env.example -f compose.yaml -f compose.host.yaml up -d --build --wait db storage
+      - run: pnpm db:migrate
+      - run: pnpm test:db
+      - run: pnpm test:requests
+      - run: pnpm test:admin
+      - run: pnpm test:operations
+      - run: pnpm test:admin-control
+      - run: pnpm test:subscriptions
+      - run: pnpm test:payments
+      - run: pnpm test:media
+        env: &local-media
+          S3_ENDPOINT: http://127.0.0.1:8333
+          S3_REGION: us-east-1
+          S3_BUCKET: qrg-local-images
+          S3_ACCESS_KEY_ID: qrg-local-only
+          S3_SECRET_ACCESS_KEY: local-storage-only-change-me
+          S3_FORCE_PATH_STYLE: 'true'
+      - run: pnpm build
+      - run: pnpm test:analytics
+      - run: pnpm test:requests:smoke
+      - run: pnpm test:admin:smoke
+      - run: pnpm test:subscriptions:smoke
+      - run: pnpm test:seller:smoke
+        env: *local-media
+      - run: pnpm test:smoke
+      - run: pnpm test:catalog:smoke
+      - run: pnpm test:web:preview
+      - run: pnpm audit --prod --audit-level=high
+      - name: Build production images
+        run: |
+          docker build --target api -t qrg-api:ci .
+          docker build --target web -t qrg-web:ci .
+      - name: Stop local services
+        if: always()
+        run: docker compose --env-file .env.example -f compose.yaml -f compose.host.yaml down
