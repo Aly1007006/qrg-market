@@ -186,6 +186,12 @@ test('reference shell preserves search forms, safe navigation and honest card me
   for (const id of ['header-search', 'hero-search'])
     assert.ok(text.includes('id="' + id + '"'));
   assert.equal((text.match(/action="\/catalog"/g) ?? []).length, 2);
+  const departmentNav = text.match(
+    /<nav[^>]*aria-label="Разделы каталога"[\s\S]*?<\/nav>/,
+  )?.[0];
+  assert.ok(departmentNav);
+  for (const removed of ['Детские товары', 'Для дома', 'Спорт', 'Ещё'])
+    assert.ok(!departmentNav.includes(removed));
   for (const label of [
     'Для покупателей — бесплатно',
     'Разместить бутик',

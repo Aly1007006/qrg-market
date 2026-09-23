@@ -44,6 +44,16 @@ async function proxy(
     headers.set('x-qrg-client', 'web');
     headers.set('content-type', type);
     headers.set('x-qrg-csrf', request.headers.get('x-qrg-csrf') ?? '');
+    if (upload && request.headers.has('x-qrg-upload-id')) {
+      const uploadId = request.headers.get('x-qrg-upload-id') ?? '';
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          uploadId,
+        )
+      )
+        return fail(400);
+      headers.set('x-qrg-upload-id', uploadId);
+    }
   }
   const query = new URL(request.url).searchParams;
   if (

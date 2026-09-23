@@ -8,6 +8,7 @@ try {
     db,
     process.env.ADMIN_INITIAL_EMAIL ?? '',
     process.env.ADMIN_INITIAL_PASSWORD ?? '',
+    process.env.ADMIN_INITIAL_PROMOTE_EXISTING === 'true',
   );
   console.log(
     JSON.stringify({

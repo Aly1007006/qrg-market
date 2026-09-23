@@ -8,6 +8,7 @@ export async function bootstrapAdmin(
   db: Database,
   email: string,
   password: string,
+  promoteExisting = false,
 ) {
   if (
     email !== email.trim().toLowerCase() ||
@@ -20,7 +21,7 @@ export async function bootstrapAdmin(
   return db.client.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(71624802)`);
     const [existing] = await tx
-      .select({ id: users.id })
+      .select({ id: users.id, disabledAt: users.disabledAt })
       .from(users)
       .where(eq(users.email, email));
     if (existing) {
@@ -30,19 +31,24 @@ export async function bootstrapAdmin(
         .where(eq(adminAccounts.userId, existing.id));
       if (account?.role === 'SUPER_ADMIN')
         return { created: false, userId: existing.id };
-      throw new Error(
-        'Existing account requires an explicit administrator management action',
-      );
+      if (!promoteExisting || account || existing.disabledAt)
+        throw new Error(
+          'Existing account requires an explicit administrator management action',
+        );
     }
     const [superAdmin] = await tx
       .select({ id: adminAccounts.userId })
       .from(adminAccounts)
       .where(eq(adminAccounts.role, 'SUPER_ADMIN'));
     if (superAdmin) throw new Error('Initial administrator already exists');
-    const [user] = await tx
-      .insert(users)
-      .values({ email, passwordHash: await new Passwords().hash(password) })
-      .returning({ id: users.id });
+    const user =
+      existing ??
+      (
+        await tx
+          .insert(users)
+          .values({ email, passwordHash: await new Passwords().hash(password) })
+          .returning({ id: users.id })
+      )[0];
     if (!user) throw new Error('Bootstrap insert failed');
     await tx.insert(adminAccounts).values({
       userId: user.id,
@@ -55,6 +61,9 @@ export async function bootstrapAdmin(
       resource: 'user',
       resourceId: user.id,
       result: 'SUCCESS',
+      reason: existing
+        ? 'Explicit operator authorization: promote existing user without resetting password'
+        : 'Initial administrator bootstrap',
     });
     return { created: true, userId: user.id };
   });

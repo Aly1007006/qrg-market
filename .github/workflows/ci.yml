@@ -47,6 +47,9 @@ jobs:
           S3_SECRET_ACCESS_KEY: local-storage-only-change-me
           S3_FORCE_PATH_STYLE: 'true'
       - run: pnpm build
+      - run: pnpm test:admin-control
+        env:
+          QRG_TEST_BUILT_ADMIN_CONTROL: 'true'
       - run: pnpm test:analytics
       - run: pnpm test:requests:smoke
       - run: pnpm test:admin:smoke

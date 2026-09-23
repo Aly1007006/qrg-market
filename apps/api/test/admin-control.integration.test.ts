@@ -3,6 +3,9 @@ import { before, after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { once } from 'node:events';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { TOTP } from 'otpauth';
@@ -24,6 +27,10 @@ import {
   users,
 } from '../src/db/schema.js';
 import { bootstrapAdmin } from '../src/admin/bootstrap.js';
+import { AdminAuth } from '../src/admin/auth.js';
+import { ModerationService } from '../src/admin/moderation.js';
+import { AdminQueryDto } from '../src/admin/dto.js';
+import { encryptTotp, encryptionKey } from '../src/admin/security.js';
 import { AuthService } from '../src/auth/service.js';
 import { ShopsService } from '../src/shops/service.js';
 import { newToken, tokenHash, csrfFor } from '../src/auth/tokens.js';
@@ -195,11 +202,11 @@ void describe(
       admin = await login(password);
       assert.equal(
         (await request('admin/overview', 'GET', undefined, admin)).status,
-        403,
+        401,
       );
       assert.equal(
         (await request('admin/administrators', 'GET', undefined, admin)).status,
-        403,
+        401,
       );
       assert.equal(
         (await request('admin/auth/mfa/setup', 'POST', {}, admin)).status,
@@ -252,6 +259,9 @@ void describe(
       assert.equal(account!.pendingTotpEncrypted, null);
       assert.ok(!JSON.stringify(account).includes(recovery[0]!));
       admin = await login(changed, recovery[0]);
+      await assert.rejects(
+        app.get(AdminAuth).login(email, changed, recovery[0]!),
+      );
       assert.equal(
         (await request('admin/overview', 'GET', undefined, admin)).status,
         200,
@@ -267,10 +277,17 @@ void describe(
         'SHOP_MANAGER',
         'SHOP_EMPLOYEE',
       ] as const) {
-        await db.client
-          .update(shopMembers)
-          .set({ role })
-          .where(eq(shopMembers.userId, sellerId));
+        await db.client.transaction(async (tx) => {
+          await tx
+            .update(shopMembers)
+            .set({ role })
+            .where(eq(shopMembers.userId, sellerId));
+          if (role !== 'SHOP_OWNER')
+            await tx
+              .insert(shopMembers)
+              .values({ shopId, userId: adminId, role: 'SHOP_OWNER' })
+              .onConflictDoNothing();
+        });
         assert.equal(
           (await request('admin/overview', 'GET', undefined, seller, true))
             .status,
@@ -281,10 +298,20 @@ void describe(
           401,
         );
       }
-      await db.client
-        .update(shopMembers)
-        .set({ role: 'SHOP_OWNER' })
-        .where(eq(shopMembers.userId, sellerId));
+      await db.client.transaction(async (tx) => {
+        await tx
+          .delete(shopMembers)
+          .where(
+            and(
+              eq(shopMembers.shopId, shopId),
+              eq(shopMembers.userId, adminId),
+            ),
+          );
+        await tx
+          .update(shopMembers)
+          .set({ role: 'SHOP_OWNER' })
+          .where(eq(shopMembers.userId, sellerId));
+      });
       assert.equal(
         (
           await request(
@@ -436,9 +463,21 @@ void describe(
       );
     });
     void test('admin list/detail responses never return credential or payment secrets', async () => {
+      const principal = await app.get(AdminAuth).authenticate(admin.token);
+      const shopList = await app
+        .get(ModerationService)
+        .list(
+          principal,
+          Object.assign(new AdminQueryDto(), { q: '', status: 'DRAFT' }),
+        );
+      assert.ok(Array.isArray(shopList.items));
+      const owned = shopList.items.find((shop) => shop.id === shopId);
+      assert.equal(owned?.ownerEmail, sellerEmail);
+      assert.equal(owned?.productCount, 2);
       for (const path of [
         'admin/auth/me',
         'admin/users',
+        'admin/shops?q=&status=DRAFT',
         'admin/users/' + sellerId,
         'admin/administrators',
         'admin/products',
@@ -473,16 +512,16 @@ void describe(
       );
       assert.equal(response.status, 201);
       limitedId = ((await response.json()) as { id: string }).id;
-      const [source] = await db.client
-        .select()
-        .from(adminAccounts)
-        .where(eq(adminAccounts.userId, adminId));
-      // Permission fixture only: encrypted value is not used for login of this account.
+      // Permission fixture uses a real account-bound encrypted secret, not another user's ciphertext.
       await db.client
         .update(adminAccounts)
         .set({
           mustChangePassword: false,
-          totpEncrypted: source!.totpEncrypted,
+          totpEncrypted: encryptTotp(
+            'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+            limitedId,
+            encryptionKey(),
+          ),
         })
         .where(eq(adminAccounts.userId, limitedId));
       limited = await fixtureSession(limitedId);
@@ -550,6 +589,62 @@ void describe(
         409,
       );
     });
+    void test('shop ownership transfer is atomic, audited, and rejects mismatched user/member IDs', async () => {
+      const [member] = await db.client
+        .insert(shopMembers)
+        .values({ shopId, userId: limitedId, role: 'SHOP_EMPLOYEE' })
+        .returning();
+      const body = {
+        action: 'SHOP_ROLE',
+        membershipId: member!.id,
+        role: 'SHOP_OWNER',
+        reason: 'Fixture ownership transfer',
+      };
+      assert.equal(
+        (
+          await request(
+            'admin/users/' + sellerId + '/actions',
+            'POST',
+            body,
+            admin,
+          )
+        ).status,
+        404,
+      );
+      assert.equal(
+        (
+          await request(
+            'admin/users/' + limitedId + '/actions',
+            'POST',
+            body,
+            admin,
+          )
+        ).status,
+        201,
+      );
+      const members = await db.client
+        .select()
+        .from(shopMembers)
+        .where(eq(shopMembers.shopId, shopId));
+      assert.equal(members.filter((m) => m.role === 'SHOP_OWNER').length, 1);
+      assert.equal(
+        members.find((m) => m.role === 'SHOP_OWNER')!.userId,
+        limitedId,
+      );
+      const original = members.find((m) => m.userId === sellerId)!;
+      assert.equal(
+        (
+          await request(
+            'admin/users/' + sellerId + '/actions',
+            'POST',
+            { ...body, membershipId: original.id },
+            admin,
+          )
+        ).status,
+        201,
+      );
+      await db.client.delete(shopMembers).where(eq(shopMembers.id, member!.id));
+    });
     void test('admin session revocation and bootstrap rerun preserve changed password', async () => {
       await bootstrapAdmin(db, email, password);
       const before = admin;
@@ -589,6 +684,109 @@ void describe(
           ).status,
         );
       assert.ok(attempts.includes(429));
+    });
+    if (process.env.QRG_TEST_BUILT_ADMIN_CONTROL === 'true')
+      void test('built control center renders every new section with authenticated permissions and noindex', async () => {
+        admin = await fixtureSession(adminId);
+        const requireWeb = createRequire(resolve('../web/package.json'));
+        const child = spawn(
+          process.execPath,
+          [
+            requireWeb.resolve('next/dist/bin/next'),
+            'start',
+            '-H',
+            '127.0.0.1',
+            '-p',
+            '43189',
+          ],
+          {
+            cwd: resolve('../web'),
+            stdio: 'ignore',
+            env: {
+              ...process.env,
+              NODE_ENV: 'production',
+              QRG_API_ORIGIN: base,
+              QRG_APP_ORIGIN: 'http://127.0.0.1:43189',
+              QRG_DEV_FIXTURES: 'false',
+            },
+          },
+        );
+        try {
+          let ready = false;
+          for (let attempt = 0; attempt < 100; attempt++) {
+            if (child.exitCode !== null)
+              throw new Error('Control preview exited');
+            try {
+              ready = (await fetch('http://127.0.0.1:43189/admin/login')).ok;
+            } catch {
+              /* Bounded startup check. */
+            }
+            if (ready) break;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          assert.ok(ready);
+          for (const path of [
+            '',
+            '/shops',
+            '/shops/' + shopId,
+            '/users',
+            '/users/' + sellerId,
+            '/products',
+            '/products/' + productId,
+            '/subscriptions',
+            '/administrators',
+            '/audit',
+            '/settings',
+          ]) {
+            const response = await fetch(
+              'http://127.0.0.1:43189/admin' + path,
+              {
+                redirect: 'manual',
+                headers: { cookie: 'qrg_admin=' + admin.token },
+              },
+            );
+            assert.equal(response.status, 200, path);
+            assert.match(await response.text(), /noindex/);
+          }
+        } finally {
+          if (child.exitCode === null) {
+            const ended = once(child, 'exit');
+            child.kill();
+            await ended;
+          }
+        }
+      });
+    void test('explicit initial promotion preserves existing password and shops; implicit promotion is forbidden', async () => {
+      await db.client
+        .delete(adminAccounts)
+        .where(eq(adminAccounts.userId, adminId));
+      const [before] = await db.client
+        .select()
+        .from(users)
+        .where(eq(users.id, sellerId));
+      await assert.rejects(bootstrapAdmin(db, sellerEmail, password));
+      const results = await Promise.all([
+        bootstrapAdmin(db, sellerEmail, password, true),
+        bootstrapAdmin(db, sellerEmail, password, true),
+      ]);
+      assert.equal(results.filter((result) => result.created).length, 1);
+      assert.ok(results.every((result) => result.userId === sellerId));
+      const [after] = await db.client
+        .select()
+        .from(users)
+        .where(eq(users.id, sellerId));
+      assert.equal(after!.passwordHash, before!.passwordHash);
+      const [account] = await db.client
+        .select()
+        .from(adminAccounts)
+        .where(eq(adminAccounts.userId, sellerId));
+      assert.equal(account!.mustChangePassword, true);
+      assert.equal(account!.totpEncrypted, null);
+      assert.equal(
+        (await db.client.select().from(shops).where(eq(shops.id, shopId)))
+          .length,
+        1,
+      );
     });
   },
 );

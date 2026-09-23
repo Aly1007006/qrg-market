@@ -8,6 +8,7 @@ export async function mutate(
   method: string,
   body: unknown,
   csrf = '',
+  uploadId?: string,
 ): Promise<unknown> {
   const upload = body instanceof FormData;
   const response = await fetch('/api/seller/' + path, {
@@ -15,6 +16,7 @@ export async function mutate(
     headers: {
       'x-qrg-client': 'web',
       'x-qrg-csrf': csrf,
+      ...(uploadId ? { 'x-qrg-upload-id': uploadId } : {}),
       ...(!upload ? { 'content-type': 'application/json' } : {}),
     },
     body: upload ? body : JSON.stringify(body),
@@ -209,11 +211,14 @@ export function ImageUpload({
   path,
   csrf,
   count,
+  replacementLabel,
 }: {
   path: string;
   csrf: string;
   count: number;
+  replacementLabel?: string;
 }) {
+  const inputId = useId();
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const router = useRouter();
@@ -242,9 +247,13 @@ export function ImageUpload({
   return (
     <form className="seller-form" onSubmit={submit}>
       <Input
-        id="file"
+        id={inputId}
         name="file"
-        label={`Фото: ${count} из 10. JPEG, PNG, WEBP до 10 MB`}
+        label={
+          replacementLabel
+            ? `${replacementLabel}. JPEG, PNG, WEBP до 10 MB`
+            : `Фото: ${count} из 10. JPEG, PNG, WEBP до 10 MB`
+        }
         type="file"
         accept="image/jpeg,image/png,image/webp"
         required

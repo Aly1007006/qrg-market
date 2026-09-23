@@ -255,7 +255,8 @@ void test('admin requires real MFA, rejects OTP replay, issues separate short ha
   assert.equal(
     (await request('admin/auth/login', 'POST', { email: emails[2], password }))
       .status,
-    400,
+    // Bootstrap accepts an omitted code, but an enrolled account still requires MFA.
+    401,
   );
   const r = await request('admin/auth/login', 'POST', {
     email: emails[2],

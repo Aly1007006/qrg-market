@@ -2,7 +2,6 @@ import Link from 'next/link';
 import type { Category } from '../lib/catalogue/model';
 import { departmentLinks } from '../lib/market-navigation';
 import { CategoryCard } from './cards';
-import { MarketIcon } from './market-icons';
 import styles from './market.module.css';
 export function CategoryNav({
   categories,
@@ -17,9 +16,6 @@ export function CategoryNav({
             {item.name}
           </Link>
         ))}
-        <Link href="/catalog">
-          Ещё <MarketIcon name="chevron" size={14} />
-        </Link>
       </div>
     </nav>
   );
@@ -37,7 +33,6 @@ export function CategoryStrip({
       {departmentLinks(categories).map((item) => (
         <CategoryCard key={item.name} {...item} />
       ))}
-      <CategoryCard name="Ещё" href="/catalog" index={10} />
     </nav>
   );
 }

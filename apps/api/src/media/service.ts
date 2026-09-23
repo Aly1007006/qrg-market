@@ -164,16 +164,45 @@ export class MediaService {
     shop: string,
     id: string,
     file: UploadedImage | undefined,
+    uploadId?: string,
   ) {
     await this.preflight(p, shop, id);
+    if (
+      uploadId !== undefined &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        uploadId,
+      )
+    )
+      throw new BadRequestException('Invalid upload ID');
     const image = await processImage(file);
-    const key = `products/${id}/${randomUUID()}.webp`;
-    await this.authorization.withShop(
+    const key = `products/${id}/${uploadId?.toLowerCase() ?? randomUUID()}.webp`;
+    const attached = await this.authorization.withShop(
       p,
       shop,
       'products.write',
       async (tx, verified) => {
         await product(tx, verified.id, id);
+        const [existing] = await tx
+          .select()
+          .from(mediaObjects)
+          .where(eq(mediaObjects.objectKey, key));
+        if (existing) {
+          if (existing.state !== 'ATTACHED')
+            throw new ConflictException(
+              'Upload is pending or removed; retry later',
+            );
+          const [saved] = await tx
+            .select()
+            .from(productImages)
+            .where(
+              and(
+                eq(productImages.productId, id),
+                eq(productImages.objectKey, key),
+              ),
+            );
+          if (!saved) throw new ConflictException();
+          return saved;
+        }
         const images = await tx
           .select()
           .from(productImages)
@@ -198,6 +227,12 @@ export class MediaService {
         });
       },
     );
+    if (attached) {
+      // Reusing a request key with different content must never replace an existing image.
+      if (!(await this.storage.read(key)).equals(image.bytes))
+        throw new ConflictException('Upload ID already used');
+      return attached;
+    }
     // The intent is committed BEFORE PUT. Failed/uncertain PUTs remain recoverable by cleanup.
     await this.storage.put(key, image.bytes);
     return this.authorization.withShop(

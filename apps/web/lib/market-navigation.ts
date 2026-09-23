@@ -20,9 +20,6 @@ export const departments = [
   { name: 'Украшения', slugs: ['jewelry'], query: 'украшения' },
   { name: 'Парфюмерия', slugs: ['perfume', 'perfumery'], query: 'парфюм' },
   { name: 'Косметика', slugs: ['cosmetics'], query: 'косметика' },
-  { name: 'Детские товары', slugs: ['kids', 'children'], query: 'детские' },
-  { name: 'Для дома', slugs: ['home'], query: 'для дома' },
-  { name: 'Спорт', slugs: ['sport', 'sports'], query: 'спорт' },
 ] as const;
 export function departmentLinks(categories: readonly Category[]) {
   return departments.map((department, index) => {

@@ -30,6 +30,7 @@ type LocalDraft = {
   form: FormState;
   files: File[];
   productId?: string;
+  uploadIds?: string[];
 };
 const empty: FormState = {
   name: '',
@@ -156,6 +157,25 @@ export function ProductEditor({
   const latest = useRef('');
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const product = useRef<string | undefined>(undefined);
+  const uploads = useRef(new Map<File, string>());
+  const fileIds = useCallback(
+    (items: File[]) =>
+      items.map((file) => {
+        let key = uploads.current.get(file);
+        if (!key) {
+          key = crypto.randomUUID();
+          uploads.current.set(file, key);
+        }
+        return key;
+      }),
+    [],
+  );
+  const [persisted, setPersisted] = useState<{
+    form: FormState;
+    files: File[];
+  }>();
+  const localUnsaved =
+    ready && !done && (persisted?.form !== form || persisted.files !== files);
   const storageKey = 'product:' + userId + ':' + shopId;
   const base = 'shops/' + shopId;
   useEffect(() => {
@@ -170,6 +190,10 @@ export function ProductEditor({
         if (!active) return;
         id.current = savedDraft?.id ?? local?.id ?? crypto.randomUUID();
         if (local) {
+          local.files.forEach((file, index) => {
+            const key = local.uploadIds?.[index];
+            if (key) uploads.current.set(file, key);
+          });
           setForm(local.form);
           setFiles(local.files);
           product.current = local.productId;
@@ -242,19 +266,24 @@ export function ProductEditor({
       id: id.current,
       form,
       files,
+      uploadIds: fileIds(files),
       ...(product.current ? { productId: product.current } : {}),
-    }).catch((error) => {
-      if (active)
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : 'Ошибка локального сохранения',
-        );
-    });
+    })
+      .then(() => {
+        if (active) setPersisted({ form, files });
+      })
+      .catch((error) => {
+        if (active)
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : 'Ошибка локального сохранения',
+          );
+      });
     return () => {
       active = false;
     };
-  }, [form, files, ready, done, storageKey]);
+  }, [form, files, ready, done, storageKey, fileIds]);
   const save = useCallback(
     async (snapshot: string) => {
       if (product.current || snapshot === lastSaved.current) return;
@@ -314,7 +343,7 @@ export function ProductEditor({
     return () => clearTimeout(timer);
   }, [form, ready, done, retry, save]);
   useEffect(() => {
-    if (!dirty && !busy) return;
+    if (!dirty && !busy && !localUnsaved) return;
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
@@ -334,7 +363,7 @@ export function ProductEditor({
       window.removeEventListener('beforeunload', warn);
       document.removeEventListener('click', navigate, true);
     };
-  }, [dirty, busy]);
+  }, [dirty, busy, localUnsaved]);
   function choose(incoming: FileList | null) {
     if (!incoming) return;
     const additions = Array.from(incoming);
@@ -366,6 +395,7 @@ export function ProductEditor({
     }
     setBusy(true);
     setMessage('');
+    let remaining = files;
     try {
       await queue.current.catch(() => undefined);
       await save(JSON.stringify(content(form)));
@@ -383,6 +413,7 @@ export function ProductEditor({
         id: id.current,
         form,
         files,
+        uploadIds: fileIds(files),
         productId: product.current,
       });
       for (let i = 0; i < files.length; i++) {
@@ -394,11 +425,14 @@ export function ProductEditor({
           'POST',
           body,
           csrf,
+          fileIds([files[i]!])[0],
         );
+        remaining = files.slice(i + 1);
         await draftStorage(storageKey, {
           id: id.current,
           form,
-          files: files.slice(i + 1),
+          files: remaining,
+          uploadIds: fileIds(remaining),
           productId: product.current,
         });
       }
@@ -419,6 +453,7 @@ export function ProductEditor({
         published: publish,
       });
     } catch (error) {
+      setFiles(remaining);
       setMessage(
         error instanceof Error
           ? error.message
@@ -479,7 +514,17 @@ export function ProductEditor({
       </div>
       {existingProductId ? (
         <div role="status">
-          <p>Товар уже создан. Продолжите редактирование его карточки.</p>
+          <p>
+            Товар сохранён. Можно завершить загрузку и публикацию или открыть
+            его карточку.
+          </p>
+          <Button
+            type="button"
+            disabled={busy || !ready}
+            onClick={() => void finish(true)}
+          >
+            Продолжить загрузку и публикацию
+          </Button>
           <Link href={'/seller/' + shopId + '/products/' + existingProductId}>
             Открыть сохранённый товар
           </Link>
@@ -508,7 +553,8 @@ export function ProductEditor({
             <h2>Фотографии</h2>
             <p>
               Добавьте 3–5 качественных фотографий товара. Первая фотография
-              будет основной.
+              будет основной. До публикации фотографии сохраняются только в этом
+              браузере.
             </p>
             <div
               className="photo-drop"
@@ -537,7 +583,7 @@ export function ProductEditor({
             </div>
             <div className="seller-images">
               {previews.map((src, i) => (
-                <div key={src}>
+                <div key={i}>
                   <Image
                     src={src}
                     alt={'Фотография товара ' + (i + 1)}
@@ -558,6 +604,40 @@ export function ProductEditor({
                     }
                   >
                     Сделать главным
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    disabled={i === 0}
+                    onClick={() =>
+                      setFiles((previous) => {
+                        const reordered = [...previous];
+                        [reordered[i - 1], reordered[i]] = [
+                          reordered[i]!,
+                          reordered[i - 1]!,
+                        ];
+                        return reordered;
+                      })
+                    }
+                  >
+                    Раньше
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    disabled={i === files.length - 1}
+                    onClick={() =>
+                      setFiles((previous) => {
+                        const reordered = [...previous];
+                        [reordered[i], reordered[i + 1]] = [
+                          reordered[i + 1]!,
+                          reordered[i]!,
+                        ];
+                        return reordered;
+                      })
+                    }
+                  >
+                    Позже
                   </Button>
                   <Button
                     type="button"

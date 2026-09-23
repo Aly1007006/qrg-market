@@ -150,6 +150,11 @@ export async function ShopBranding({
               />
             )}
             <ImageUpload
+              replacementLabel={
+                kind === 'logo'
+                  ? 'Загрузить или заменить логотип'
+                  : 'Загрузить или заменить обложку'
+              }
               path={'shops/' + shopId + '/branding/' + kind + '/images'}
               csrf={csrf}
               count={0}

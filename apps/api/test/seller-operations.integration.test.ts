@@ -310,6 +310,58 @@ void describe(
         201,
       );
     });
+    void test('onboarding is persisted per user/shop, derived from real records and tenant scoped', async () => {
+      const resource = path() + '/onboarding';
+      const first = await request(resource);
+      assert.equal(first.status, 200);
+      const state = (await first.json()) as {
+        checklist: { firstProduct: boolean; logo: boolean };
+        skipped: boolean;
+      };
+      assert.equal(state.checklist.firstProduct, true);
+      assert.equal(state.checklist.logo, false);
+      assert.equal(state.skipped, false);
+      assert.equal(
+        (await request(resource, 'PUT', { action: 'SKIP' })).status,
+        200,
+      );
+      assert.equal(
+        ((await (await request(resource)).json()) as { skipped: boolean })
+          .skipped,
+        true,
+      );
+      assert.equal(
+        (await request(resource, 'PUT', { action: 'REVIEW' }, b)).status,
+        404,
+      );
+      assert.equal((await request(resource, 'GET', undefined, b)).status, 404);
+      assert.equal(
+        (
+          await request(resource, 'PUT', {
+            action: 'REVIEW',
+            completed: true,
+            shopId: shopB,
+          })
+        ).status,
+        400,
+      );
+      assert.equal(
+        (await request(resource, 'PUT', { action: 'RESUME' })).status,
+        200,
+      );
+      assert.equal(
+        (await request(resource, 'PUT', { action: 'REVIEW' })).status,
+        200,
+      );
+      const restored = (await (await request(resource)).json()) as {
+        skipped: boolean;
+        reviewed: boolean;
+        completed: boolean;
+      };
+      assert.equal(restored.skipped, false);
+      assert.equal(restored.reviewed, true);
+      assert.equal(restored.completed, false);
+    });
     void test('seller list search/status/count pagination and image-order isolation', async () => {
       const response = await request(
         path() +

@@ -65,6 +65,7 @@ export default async function ShopPage({ params }: Props) {
         {shop.image ? (
           <Image
             src={shop.image}
+            unoptimized={shop.image.startsWith('/api/images/')}
             alt={
               (shop.demo === false
                 ? 'Магазин '
@@ -81,9 +82,20 @@ export default async function ShopPage({ params }: Props) {
       </div>
       <section className="shop-intro">
         <div>
-          <div className="shop-monogram" aria-hidden="true">
-            {shop.name.slice(0, 1)}
-          </div>
+          {shop.logo ? (
+            <Image
+              src={shop.logo}
+              alt={'Логотип ' + shop.name}
+              width={64}
+              height={64}
+              unoptimized
+              className="shop-monogram"
+            />
+          ) : (
+            <div className="shop-monogram" aria-hidden="true">
+              {shop.name.slice(0, 1)}
+            </div>
+          )}
           {shop.demo !== false && (
             <Badge>Демо-магазин · не верифицирован</Badge>
           )}

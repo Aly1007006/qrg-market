@@ -10,7 +10,7 @@ import { once } from 'node:events';
 import sharp from 'sharp';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { AppModule } from '../src/app.module.js';
 import { loadConfig } from '../src/config.js';
 import { configureApplication } from '../src/http.js';
@@ -27,6 +27,7 @@ import {
   mediaObjects,
   productImages,
   shopMembers,
+  shopImages,
 } from '../src/db/schema.js';
 import { ObjectStorage } from '../src/media/storage.js';
 import { cleanupMedia } from '../src/media/service.js';
@@ -112,6 +113,7 @@ async function upload(
   mime = 'image/png',
   extra?: string,
   csrf = true,
+  uploadId?: string,
 ) {
   const form = new FormData();
   form.append(
@@ -125,6 +127,7 @@ async function upload(
     headers: {
       origin: config.appOrigin,
       'x-qrg-client': 'web',
+      ...(uploadId ? { 'x-qrg-upload-id': uploadId } : {}),
       ...(client
         ? {
             cookie: 'qrg_session=' + client.token,
@@ -146,11 +149,21 @@ after(async () => {
     const objects = await db.client
       .select()
       .from(mediaObjects)
-      .where(eq(mediaObjects.productId, productId));
+      .where(
+        or(
+          eq(mediaObjects.productId, productId),
+          eq(mediaObjects.shopId, shopA),
+        ),
+      );
     for (const o of objects) await app.get(ObjectStorage).remove(o.objectKey);
     await db.client
       .delete(mediaObjects)
-      .where(eq(mediaObjects.productId, productId));
+      .where(
+        or(
+          eq(mediaObjects.productId, productId),
+          eq(mediaObjects.shopId, shopA),
+        ),
+      );
   }
   if (db) {
     if (shopA && shopB)
@@ -357,6 +370,135 @@ void test('ambiguous PUT failure leaves a durable intent and no product image', 
     .where(eq(mediaObjects.objectKey, intent.objectKey));
   assert.equal((await cleanupMedia(db, storage)).removed, 1);
   await assert.rejects(storage.read(intent.objectKey));
+});
+
+void test('upload retry key avoids duplicate photos and cannot replace content or cross tenants', async () => {
+  const key = randomUUID();
+  const send = (bytes = buffer, client = a, id: string = key) =>
+    upload(client, shopA, bytes, 'image/png', undefined, true, id);
+  assert.equal((await send(buffer, a, '../invalid')).status, 400);
+  const first = await send();
+  assert.equal(first.status, 201);
+  const saved = (await first.json()) as { id: string; objectKey: string };
+  const retry = await send();
+  assert.equal(retry.status, 201);
+  assert.equal(((await retry.json()) as { id: string }).id, saved.id);
+  assert.equal((await send(buffer, b)).status, 404);
+  const different = await sharp({
+    create: { width: 20, height: 20, channels: 3, background: 'blue' },
+  })
+    .png()
+    .toBuffer();
+  assert.equal((await send(different)).status, 409);
+  assert.equal(
+    (
+      await db.client
+        .select()
+        .from(productImages)
+        .where(eq(productImages.objectKey, saved.objectKey))
+    ).length,
+    1,
+  );
+  await db.client.delete(productImages).where(eq(productImages.id, saved.id));
+  await db.client
+    .update(mediaObjects)
+    .set({ state: 'DELETING', retryAt: new Date() })
+    .where(eq(mediaObjects.objectKey, saved.objectKey));
+  await cleanupMedia(db, app.get(ObjectStorage));
+});
+
+void test('shop branding validates IDs, MIME, ownership, replacement cleanup and visibility', async () => {
+  const branding = (shop: string, kind = 'logo') =>
+    `/api/v1/shops/${shop}/branding/${kind}`;
+  async function send(
+    shop = shopA,
+    client = a,
+    bytes = buffer,
+    mime = 'image/png',
+    extra = false,
+  ) {
+    const form = new FormData();
+    form.append(
+      'file',
+      new Blob([new Uint8Array(bytes)], { type: mime }),
+      'logo.png',
+    );
+    if (extra) form.append('shop_id', shopB);
+    return fetch(base + branding(shop) + '/images', {
+      method: 'POST',
+      headers: {
+        origin: config.appOrigin,
+        'x-qrg-client': 'web',
+        'x-qrg-csrf': client.csrfToken,
+        cookie: 'qrg_session=' + client.token,
+      },
+      body: form,
+    });
+  }
+  assert.equal((await send('-'.repeat(36))).status, 400);
+  assert.equal((await send(shopA, b)).status, 404);
+  assert.equal((await send(shopB, a)).status, 404);
+  assert.equal((await send(shopA, a, buffer, 'image/png', true)).status, 400);
+  assert.equal(
+    (await send(shopA, a, Buffer.from('<svg/>'), 'image/svg+xml')).status,
+    415,
+  );
+  assert.equal((await send(shopA, a, Buffer.from('<html/>'))).status, 415);
+  assert.equal(
+    (await send(shopA, a, Buffer.alloc(10 * 1024 * 1024 + 1))).status,
+    413,
+  );
+  const first = await send();
+  assert.equal(first.status, 201, await first.clone().text());
+  const { id } = (await first.json()) as { id: string };
+  const [old] = await db.client
+    .select()
+    .from(shopImages)
+    .where(eq(shopImages.id, id));
+  assert.ok(old);
+  assert.match(
+    old.objectKey,
+    new RegExp('^shops/' + shopA + '/[0-9a-f-]{36}\\.webp$'),
+  );
+  assert.equal(
+    (
+      await fetch(base + branding(shopA) + '/content', {
+        headers: { cookie: 'qrg_session=' + b.token },
+      })
+    ).status,
+    404,
+  );
+  const own = await fetch(base + branding(shopA) + '/content', {
+    headers: { cookie: 'qrg_session=' + a.token },
+  });
+  assert.equal(own.status, 200);
+  assert.equal(
+    (await sharp(Buffer.from(await own.arrayBuffer())).metadata()).format,
+    'webp',
+  );
+  assert.equal((await fetch(base + '/api/v1/public/images/' + id)).status, 404);
+  assert.equal((await send()).status, 201);
+  await cleanupMedia(db, app.get(ObjectStorage));
+  await assert.rejects(app.get(ObjectStorage).read(old.objectKey));
+  assert.equal(
+    (
+      await db.client
+        .select()
+        .from(shopImages)
+        .where(eq(shopImages.shopId, shopA))
+    ).length,
+    1,
+  );
+  await db.client
+    .update(shops)
+    .set({ status: 'ACTIVE' })
+    .where(eq(shops.id, shopA));
+  assert.equal((await fetch(base + '/api/v1/public/images/' + id)).status, 200);
+  assert.equal((await send()).status, 409);
+  await db.client
+    .update(shops)
+    .set({ status: 'DRAFT' })
+    .where(eq(shops.id, shopA));
 });
 
 if (process.env.QRG_TEST_BUILT_SELLER === 'true')

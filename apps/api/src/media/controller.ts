@@ -7,6 +7,7 @@ import {
   Inject,
   Injectable,
   Param,
+  Headers,
   ParseUUIDPipe,
   ParseEnumPipe,
   SetMetadata,
@@ -70,7 +71,9 @@ export class ShopImageAccessGuard implements CanActivate {
     if (!req.principal) throw new UnauthorizedException();
     if (
       typeof req.params.shopId !== 'string' ||
-      !/^[0-9a-f-]{36}$/.test(req.params.shopId) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        req.params.shopId,
+      ) ||
       !['logo', 'cover'].includes(String(req.params.kind))
     )
       throw new BadRequestException();
@@ -165,8 +168,9 @@ export class MediaController {
     @Param('shopId', uuid()) shop: string,
     @Param('productId', uuid()) id: string,
     @UploadedFile() file: UploadedImage | undefined,
+    @Headers('x-qrg-upload-id') uploadId?: string,
   ) {
-    return this.media.upload(p, shop, id, file);
+    return this.media.upload(p, shop, id, file, uploadId);
   }
   @Delete(':imageId')
   @HttpCode(204)

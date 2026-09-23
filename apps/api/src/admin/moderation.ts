@@ -130,11 +130,11 @@ export class ModerationService {
           createdAt: shops.createdAt,
           ownerEmail: sql<
             string | null
-          >`(SELECT u.email FROM shop_members m JOIN users u ON u.id=m.user_id WHERE m.shop_id=${shops.id} AND m.role='SHOP_OWNER' ORDER BY m.created_at LIMIT 1)`,
-          productCount: sql<number>`(SELECT count(*)::integer FROM products p WHERE p.shop_id=${shops.id})`,
+          >`(SELECT u.email FROM shop_members m JOIN users u ON u.id=m.user_id WHERE m.shop_id="shops"."id" AND m.role='SHOP_OWNER' ORDER BY m.created_at LIMIT 1)`,
+          productCount: sql<number>`(SELECT count(*)::integer FROM products p WHERE p.shop_id="shops"."id")`,
           subscriptionStatus: sql<
             string | null
-          >`(SELECT status FROM subscriptions WHERE shop_id=${shops.id})`,
+          >`(SELECT status FROM subscriptions WHERE shop_id="shops"."id")`,
           publicVisible: sql<boolean>`${shops.status}='ACTIVE' AND ${subscriptionVisible(shops.id)}`,
         })
         .from(shops)

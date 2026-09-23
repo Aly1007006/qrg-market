@@ -4,9 +4,12 @@ import { departmentLinks } from '../lib/market-navigation.ts';
 
 test('reference departments preserve order and use search when taxonomy is unavailable', () => {
   const links = departmentLinks([]);
-  assert.equal(links.length, 10);
+  assert.equal(links.length, 7);
   assert.equal(links[0]?.name, 'Женская одежда');
-  assert.equal(links[9]?.name, 'Спорт');
+  assert.equal(links[6]?.name, 'Косметика');
+  for (const removed of ['Детские товары', 'Для дома', 'Спорт', 'Ещё']) {
+    assert.ok(!links.some((link) => link.name === removed));
+  }
   for (const link of links) {
     const url = new URL(link.href, 'https://qrg.example');
     assert.equal(url.pathname, '/catalog');
