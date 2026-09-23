@@ -27,6 +27,8 @@
     "media:cleanup": "pnpm --filter @qrg/api media:cleanup",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint && prettier --check .",
+    "format:check": "prettier --check .",
+    "source:check": "node scripts/source-integrity.mjs",
     "format": "prettier --write .",
     "test": "pnpm -r --if-present test",
     "test:web:preview": "node --test scripts/web-preview.test.mjs",

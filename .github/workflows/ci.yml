@@ -25,6 +25,8 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm source:check
+      - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
@@ -47,6 +49,9 @@ jobs:
           S3_SECRET_ACCESS_KEY: local-storage-only-change-me
           S3_FORCE_PATH_STYLE: 'true'
       - run: pnpm build
+      - run: pnpm source:check
+      - name: Verify build did not mutate tracked files
+        run: git diff --exit-code -- .
       - run: pnpm test:admin-control
         env:
           QRG_TEST_BUILT_ADMIN_CONTROL: 'true'

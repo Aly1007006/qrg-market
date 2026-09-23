@@ -12,6 +12,7 @@ if (reuse && reuse !== 'http://127.0.0.1:3002')
 const base = reuse ?? 'http://127.0.0.1:43182';
 let server;
 before(async () => {
+  let readinessError;
   if (!reuse)
     server = spawn(
       process.execPath,
@@ -40,10 +41,12 @@ before(async () => {
     try {
       const response = await fetch(base);
       if (response.ok) return;
-    } catch {}
+    } catch (error) {
+      readinessError = error;
+    }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error('Preview readiness timeout');
+  throw new Error('Preview readiness timeout', { cause: readinessError });
 });
 after(async () => {
   if (server && server.exitCode === null) {

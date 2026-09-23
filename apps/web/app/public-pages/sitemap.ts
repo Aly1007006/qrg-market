@@ -16,7 +16,8 @@ export default async function sitemap({
   if (!indexingEnabled()) return [];
   const part = await id;
   if (!/^\d{1,5}$/.test(part)) return [];
-  const origin = siteOrigin(process.env.QRG_SITE_URL)!;
+  const origin = siteOrigin(process.env.QRG_SITE_URL);
+  if (!origin) return [];
   return array(await publicApi('seo/entries?page=' + (Number(part) + 1)))
     .map(record)
     .map((item) => {

@@ -4,7 +4,8 @@ import { generateSitemaps } from './public-pages/sitemap';
 export const dynamic = 'force-dynamic';
 export default async function robots(): Promise<MetadataRoute.Robots> {
   if (!indexingEnabled()) return { rules: { userAgent: '*', disallow: '/' } };
-  const origin = siteOrigin(process.env.QRG_SITE_URL)!;
+  const origin = siteOrigin(process.env.QRG_SITE_URL);
+  if (!origin) return { rules: { userAgent: '*', disallow: '/' } };
   const parts = await generateSitemaps();
   return {
     rules: {
