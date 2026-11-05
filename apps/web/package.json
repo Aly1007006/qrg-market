@@ -12,13 +12,13 @@
     "test": "node --test test/catalogue.test.ts test/catalogue-api.test.ts test/seller.test.ts test/requests.test.ts test/admin.test.ts test/market-navigation.test.ts test/analytics-seo.test.ts test/favorites.test.ts"
   },
   "dependencies": {
-    "next": "16.3.4",
+    "next": "16.4.1",
     "qrcode": "1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "16.3.4",
+    "@next/eslint-plugin-next": "16.4.1",
     "@types/qrcode": "1.5.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
