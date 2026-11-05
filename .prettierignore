@@ -6,4 +6,5 @@ dist
 coverage
 .tools
 .docker-local
+.cache
 next-env.d.ts
