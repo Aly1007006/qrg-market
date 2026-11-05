@@ -8,6 +8,7 @@
     "pnpm": "11.26.0"
   },
   "scripts": {
+    "dev:docker": "node scripts/local-start.mjs",
     "test:admin-control": "pnpm --filter @qrg/api test:admin-control",
     "admin:bootstrap": "pnpm --filter @qrg/api admin:bootstrap",
     "test:operations": "pnpm --filter @qrg/api test:operations",
@@ -30,7 +31,7 @@
     "format:check": "prettier --check .",
     "source:check": "node scripts/source-integrity.mjs",
     "format": "prettier --write .",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm -r --if-present test && node --test scripts/local-start.test.mjs scripts/public-preview-gateway.test.mjs",
     "test:web:preview": "node --test scripts/web-preview.test.mjs",
     "test:catalog:smoke": "node scripts/catalogue-smoke.mjs",
     "test:critical": "pnpm test",

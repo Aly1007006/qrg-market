@@ -6,6 +6,7 @@ const base = {
   DATABASE_URL: 'postgresql://test:local-only@localhost:5432/qrg_test',
   APP_ORIGIN: 'https://qrg.example',
   AUTH_RATE_LIMIT_SECRET: 'test-rate-limit-secret-at-least-32-characters',
+  INTERNAL_PROXY_SECRET: 'test-internal-proxy-secret-at-least-32-characters',
 };
 await test('development, test and production have explicit safe defaults', () => {
   assert.equal(loadConfig(base).swaggerEnabled, true);
@@ -13,6 +14,16 @@ await test('development, test and production have explicit safe defaults', () =>
   const production = loadConfig({ ...base, NODE_ENV: 'production' });
   assert.equal(production.databaseSsl, true);
   assert.equal(production.swaggerEnabled, false);
+  assert.equal(production.customerRequestsEnabled, false);
+  assert.equal(production.customerRequestRetentionDays, null);
+  const requests = loadConfig({
+    ...base,
+    NODE_ENV: 'production',
+    CUSTOMER_REQUESTS_ENABLED: 'true',
+    CUSTOMER_REQUEST_RETENTION_DAYS: '45',
+  });
+  assert.equal(requests.customerRequestsEnabled, true);
+  assert.equal(requests.customerRequestRetentionDays, 45);
   assert.ok(Object.isFrozen(production));
 });
 await test('rejects malformed configuration without leaking values', () => {
@@ -34,7 +45,14 @@ await test('rejects malformed configuration without leaking values', () => {
     { NODE_ENV: 'production', APP_ORIGIN: 'http://qrg.example' },
     { NODE_ENV: 'production', APP_ORIGIN: '' },
     { NODE_ENV: 'production', AUTH_RATE_LIMIT_SECRET: '' },
+    { NODE_ENV: 'production', INTERNAL_PROXY_SECRET: '' },
     { AUTH_RATE_LIMIT_SECRET: 'short' },
+    { INTERNAL_PROXY_SECRET: 'short' },
+    { CUSTOMER_REQUESTS_ENABLED: 'yes' },
+    { CUSTOMER_REQUEST_RETENTION_DAYS: '0' },
+    { CUSTOMER_REQUEST_RETENTION_DAYS: '1.5' },
+    { CUSTOMER_REQUEST_RETENTION_DAYS: '3651' },
+    { NODE_ENV: 'production', CUSTOMER_REQUESTS_ENABLED: 'true' },
   ]) {
     assert.throws(
       () => loadConfig({ ...base, ...override }),

@@ -31,7 +31,10 @@ export function MobileDrawer({
         aria-labelledby={titleId}
         onClose={() => opener.current?.focus()}
         onClick={(event) => {
-          if (event.target instanceof Element && event.target.closest('a'))
+          if (
+            event.target === event.currentTarget ||
+            (event.target instanceof Element && event.target.closest('a'))
+          )
             dialog.current?.close();
         }}
       >

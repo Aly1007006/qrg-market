@@ -4,19 +4,7 @@ import { money, type Product, type Shop } from '../lib/catalogue/model';
 import { MarketIcon } from './market-icons';
 import { TwoGisLink } from './two-gis-link';
 import styles from './market.module.css';
-function FavoritePlaceholder({ name }: { name: string }) {
-  return (
-    <button
-      className={styles.favorite}
-      type="button"
-      disabled
-      title="Избранное пока недоступно"
-      aria-label={'Избранное пока недоступно: ' + name}
-    >
-      <MarketIcon name="heart" size={18} />
-    </button>
-  );
-}
+import { FavoriteButton } from './favorites';
 export function ProductCard({
   product,
   shop,
@@ -39,6 +27,17 @@ export function ProductCard({
           ) : (
             <span className="no-photo">Фото пока не добавлено</span>
           )}
+          {product.oldPrice && product.oldPrice > product.price ? (
+            <span className={styles.productTag}>
+              {Math.round((1 - product.price / product.oldPrice) * 100) > 0
+                ? '−' +
+                  Math.round((1 - product.price / product.oldPrice) * 100) +
+                  '%'
+                : 'Скидка'}
+            </span>
+          ) : product.isNew ? (
+            <span className={styles.productTag}>Новинка</span>
+          ) : null}
         </div>
         <div className={styles.productCopy}>
           <h3>{product.name}</h3>
@@ -54,7 +53,12 @@ export function ProductCard({
           </p>
         </div>
       </Link>
-      <FavoritePlaceholder name={product.name} />
+      <FavoriteButton
+        kind="product"
+        slug={product.slug}
+        name={product.name}
+        scope={product.demo === false ? 'live' : 'demo'}
+      />
     </article>
   );
 }
@@ -79,7 +83,12 @@ export function ShopCard({ shop }: { shop: Shop }) {
           <span className="no-photo">Фото пока не добавлено</span>
         )}
       </Link>
-      <FavoritePlaceholder name={shop.name} />
+      <FavoriteButton
+        kind="shop"
+        slug={shop.slug}
+        name={shop.name}
+        scope={demo ? 'demo' : 'live'}
+      />
       <div className={styles.shopBody}>
         <div className={styles.shopIdentity}>
           <span className={styles.shopLogo} aria-hidden="true">

@@ -1,0 +1,15 @@
+endpoints = {
+  s3 = "https://storage.yandexcloud.kz"
+}
+bucket = "REPLACE_WITH_PRIVATE_TERRAFORM_STATE_BUCKET"
+region = "kz1"
+key    = "qrg-market/production/terraform.tfstate"
+
+use_path_style              = true
+skip_region_validation      = true
+skip_credentials_validation = true
+skip_requesting_account_id  = true
+skip_s3_checksum            = true
+
+# Supply access_key and secret_key through AWS_ACCESS_KEY_ID and
+# AWS_SECRET_ACCESS_KEY in the operator environment, never in this file.

@@ -16,6 +16,8 @@ import {
   permissions,
 } from '../src/authorization/permissions.js';
 import { UnconfiguredPasswordResetDelivery } from '../src/auth/delivery.js';
+import { clientIdentity } from '../src/auth/client-identity.js';
+import { createHmac } from 'node:crypto';
 
 const config = loadConfig({
   NODE_ENV: 'test',
@@ -38,6 +40,7 @@ await test('cookie policy is host-only, HttpOnly, SameSite and Secure with __Hos
     DATABASE_URL: config.databaseUrl,
     APP_ORIGIN: 'https://qrg.example',
     AUTH_RATE_LIMIT_SECRET: 'test-secret-at-least-32-characters-long',
+    INTERNAL_PROXY_SECRET: 'test-internal-proxy-secret-at-least-32-characters',
   });
   assert.deepEqual(cookieOptions(config), {
     httpOnly: true,
@@ -76,6 +79,33 @@ await test('cookie policy is host-only, HttpOnly, SameSite and Secure with __Hos
     ),
     undefined,
   );
+});
+await test('production rate limits trust only a current signed pseudonymous client proof', () => {
+  const production = loadConfig({
+    NODE_ENV: 'production',
+    DATABASE_URL: config.databaseUrl,
+    APP_ORIGIN: 'https://qrg.example',
+    AUTH_RATE_LIMIT_SECRET: 'test-secret-at-least-32-characters-long',
+    INTERNAL_PROXY_SECRET: 'test-internal-proxy-secret-at-least-32-characters',
+  });
+  const id = 'a'.repeat(64);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = createHmac('sha256', production.internalProxySecret)
+    .update(`${timestamp}.${id}`)
+    .digest('hex');
+  const request = {
+    headers: {
+      'x-qrg-client-id': id,
+      'x-qrg-client-proof': `${timestamp}.${signature}`,
+    },
+    socket: { remoteAddress: '127.0.0.1' },
+  } as unknown as Request;
+  assert.equal(clientIdentity(request, production), `proxy:${id}`);
+  request.headers['x-qrg-client-proof'] = `${timestamp}.${'b'.repeat(64)}`;
+  assert.throws(() => clientIdentity(request, production));
+  delete request.headers['x-qrg-client-proof'];
+  assert.throws(() => clientIdentity(request, production));
+  assert.equal(clientIdentity(request, config), 'socket:127.0.0.1');
 });
 await test('role/permission matrix grants staff no shop settings or employee management access', () => {
   for (const permission of permissions)

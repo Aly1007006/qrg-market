@@ -1,4 +1,5 @@
 import { apiOrigin } from '../../../lib/seller/boundary';
+import { internalClientHeaders } from '../../../lib/internal-client';
 const headers = {
   'cache-control': 'no-store',
   'x-content-type-options': 'nosniff',
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
         origin,
         'x-qrg-client': 'web',
         'content-type': 'application/json',
+        ...internalClientHeaders(request),
       },
       body: Buffer.concat(chunks),
       cache: 'no-store',

@@ -35,7 +35,7 @@ export default async function Home() {
           <h2>
             {data.mode === 'live' ? 'Бутики Караганды' : 'Популярные бутики'}
           </h2>
-          <Link href="/catalog" aria-label="Смотреть все предложения бутиков">
+          <Link href="/shops" aria-label="Смотреть все предложения бутиков">
             Смотреть все <Arrow />
           </Link>
         </div>

@@ -19,6 +19,8 @@ import {
   parseProduct,
   parseShop,
 } from './contract';
+import { parseFavorites, type Favorite } from '../favorites';
+import type { Product, Shop } from './model';
 export function catalogueMode() {
   return fixturesEnabled(process.env.NODE_ENV, process.env.QRG_DEV_FIXTURES)
     ? 'fixtures'
@@ -26,7 +28,10 @@ export function catalogueMode() {
       ? 'live'
       : 'unavailable';
 }
-export async function publicApi(path: string): Promise<unknown> {
+export async function publicApi(
+  path: string,
+  headers?: Record<string, string>,
+): Promise<unknown> {
   const origin = new URL(process.env.QRG_API_ORIGIN ?? '');
   if (
     !['http:', 'https:'].includes(origin.protocol) ||
@@ -39,6 +44,7 @@ export async function publicApi(path: string): Promise<unknown> {
     throw new Error('Invalid API origin');
   // Paths are created only by this server adapter, never supplied by a browser.
   const response = await fetch(origin.origin + '/api/v1/public/' + path, {
+    ...(headers ? { headers } : {}),
     cache: 'no-store',
     redirect: 'error',
     signal: AbortSignal.timeout(8000),
@@ -116,6 +122,70 @@ export async function queryCatalogue(
   };
 }
 export const getCatalogue = cache(async () => queryCatalogue());
+export async function readShopDirectory(page: number) {
+  await connection();
+  const mode = catalogueMode();
+  if (mode === 'live') {
+    const shops = array(await publicApi('shops?limit=24&page=' + page)).map(
+      parseShop,
+    );
+    return { shops, more: shops.length === 24, mode };
+  }
+  const shops = (await getCatalogue()).shops.filter(
+    (shop) => shop.status === 'ACTIVE',
+  );
+  return {
+    shops: shops.slice((page - 1) * 24, page * 24),
+    more: shops.length > page * 24,
+    mode,
+  };
+}
+export async function readSavedItems(
+  selection: Favorite[],
+): Promise<
+  { entry: Favorite; product?: Product | undefined; shop?: Shop | undefined }[]
+> {
+  await connection();
+  const items = parseFavorites(selection).slice(0, 8);
+  if (catalogueMode() !== 'live') {
+    const data = await getCatalogue();
+    return items.map((entry) => {
+      if (entry.kind === 'shop') {
+        const shop = data.shops.find(
+          (shop) => shop.slug === entry.slug && shop.status === 'ACTIVE',
+        );
+        return { entry, shop };
+      }
+      const product = publicProducts(data).find(
+        (product) => product.slug === entry.slug,
+      );
+      const shop = data.shops.find((shop) => shop.slug === product?.shop);
+      return { entry, product, shop };
+    });
+  }
+  const results: { entry: Favorite; product?: Product; shop?: Shop }[] = [];
+  // Bound concurrent upstream requests: favorites are references, never cached prices or contacts.
+  for (const entry of items) {
+    const raw = await publicApi(
+      (entry.kind === 'product' ? 'products/' : 'shops/') +
+        encodeURIComponent(entry.slug),
+    );
+    if (raw === null) {
+      results.push({ entry });
+      continue;
+    }
+    if (entry.kind === 'shop') results.push({ entry, shop: parseShop(raw) });
+    else {
+      const product = parseProduct(raw, process.env.QRG_MEDIA_ORIGIN);
+      results.push({
+        entry,
+        product,
+        ...(product.shopDetails ? { shop: product.shopDetails } : {}),
+      });
+    }
+  }
+  return results;
+}
 export const readProduct = cache(async (slug: string) => {
   await connection();
   if (catalogueMode() !== 'live') {

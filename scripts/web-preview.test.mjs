@@ -198,15 +198,67 @@ test('reference shell preserves search forms, safe navigation and honest card me
   for (const label of [
     'Для покупателей — бесплатно',
     'Разместить бутик',
-    'Избранное пока недоступно',
+    'В избранное:',
     'Режим работы пока не указан',
   ])
     assert.ok(text.includes(label), label);
-  assert.ok(text.includes('href="/seller/login"'));
+  assert.match(
+    text,
+    /<a(?=[^>]*href="\/seller")(?=[^>]*aria-label="Открыть кабинет продавца")[^>]*>/,
+  );
+  assert.ok(text.includes('href="/favorites"'));
+  assert.ok(text.includes('href="/shops"'));
   assert.ok(text.includes('href="/product/demo-kids-set"'));
   assert.ok(text.includes('href="/shop/demo-beauty"'));
   assert.ok(text.includes('<details'));
   assert.ok(!text.includes('aggregateRating'));
+});
+
+test('shop directory includes only public fixture shops and links to their pages', async () => {
+  const text = await html('/shops');
+  assert.ok(text.includes('Бутики Караганды'));
+  for (const slug of [
+    'demo-atelier',
+    'demo-form',
+    'demo-objects',
+    'demo-beauty',
+  ])
+    assert.ok(text.includes('href="/shop/' + slug + '"'));
+  assert.ok(!text.includes('href="/shop/demo-hidden"'));
+});
+
+test('favorites render current public data, discard unsafe references and stay noindex', async () => {
+  const text = await html(
+    '/favorites?product=demo-sand-coat&shop=demo-atelier&product=..%2Fadmin',
+  );
+  assert.ok(text.includes('Пальто свободного кроя'));
+  assert.ok(text.includes('href="/shop/demo-atelier"'));
+  assert.ok(!text.includes('href="/product/../admin"'));
+  assert.match(text, /name="robots" content="noindex, nofollow"/);
+  assert.ok(
+    (await html('/favorites?product=missing')).includes(
+      'Предложение сейчас недоступно',
+    ),
+  );
+  assert.ok(
+    (await html('/favorites')).includes('Сохраните то, что понравилось'),
+  );
+});
+
+test('product gallery is accessible and active filter removal preserves remaining filters', async () => {
+  const product = await html('/product/demo-sand-coat');
+  assert.ok(product.includes('Увеличить фото: Пальто свободного кроя'));
+  assert.ok(product.includes('Закрыть фотографии'));
+  const text = await html('/catalog?q=coat&color=black&page=2');
+  const anchor = text.match(
+    /<a\b[^>]*aria-label="Убрать фильтр: Цвет: black"[^>]*>/,
+  )?.[0];
+  const match = anchor?.match(/href="([^"]*)"/);
+  assert.ok(match);
+  const url = new URL(match[1].replaceAll('&amp;', '&'), 'https://qrg.example');
+  assert.equal(url.searchParams.get('q'), 'coat');
+  assert.equal(url.searchParams.has('color'), false);
+  assert.equal(url.searchParams.has('page'), false);
 });
 
 test('reference assets optimize while protected image proxy cannot be cached through optimizer', async () => {

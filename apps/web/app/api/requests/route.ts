@@ -1,4 +1,5 @@
 import { apiOrigin, uuidPattern } from '../../../lib/seller/boundary';
+import { internalClientHeaders } from '../../../lib/internal-client';
 const headers = {
   'cache-control': 'no-store',
   'content-type': 'application/json',
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
     const r = await fetch(
       `${apiOrigin()}/api/v1/public/requests/challenge/${product}`,
       {
+        headers: internalClientHeaders(request),
         cache: 'no-store',
         redirect: 'error',
         signal: AbortSignal.timeout(8000),
@@ -66,6 +68,7 @@ export async function POST(request: Request) {
         origin,
         'x-qrg-client': 'web',
         'content-type': 'application/json',
+        ...internalClientHeaders(request),
       },
       body: Buffer.concat(chunks),
       cache: 'no-store',

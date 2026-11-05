@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
@@ -28,6 +28,7 @@ import {
   customerRequests,
   shopContacts,
   shopLocations,
+  authRateLimits,
 } from '../src/db/schema.js';
 import { paidFixtures, removeBillingFixtures } from './billing-fixtures.js';
 import { cleanupExpired } from '../src/db/cleanup.js';
@@ -104,6 +105,8 @@ void test('built web analytics proxy, private report and sitemap work with real 
         ...process.env,
         NODE_ENV: 'production',
         QRG_API_ORIGIN: base,
+        QRG_INTERNAL_PROXY_SECRET:
+          'test-internal-proxy-secret-at-least-32-characters',
         QRG_APP_ORIGIN: config.appOrigin,
         QRG_SITE_URL: 'https://qrg.example.test',
         QRG_INDEXING_ENABLED: 'true',
@@ -373,6 +376,58 @@ void test('collection accepts only real visible resources, server timestamps and
     .update(shops)
     .set({ status: 'ACTIVE' })
     .where(eq(shops.id, shopA));
+});
+void test('resource-scoped analytics throttling bounds metric poisoning without storing identity', async () => {
+  const identity = 'a'.repeat(64);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = createHmac('sha256', config.internalProxySecret)
+    .update(`${timestamp}.${identity}`)
+    .digest('hex');
+  const eventIds: string[] = [];
+  const post = (eventId: string) =>
+    fetch(base + '/api/v1/public/analytics', {
+      method: 'POST',
+      headers: {
+        origin: config.appOrigin,
+        'x-qrg-client': 'web',
+        'content-type': 'application/json',
+        'x-qrg-client-id': identity,
+        'x-qrg-client-proof': `${timestamp}.${signature}`,
+      },
+      body: JSON.stringify({
+        eventId,
+        type: 'PRODUCT_VIEW',
+        resource: 'product',
+        slug,
+      }),
+    });
+  try {
+    for (let i = 0; i < 20; i++) {
+      const id = randomUUID();
+      eventIds.push(id);
+      assert.equal((await post(id)).status, 202);
+    }
+    assert.equal((await post(randomUUID())).status, 429);
+    assert.equal(
+      (
+        await db.client
+          .select()
+          .from(analyticsEvents)
+          .where(inArray(analyticsEvents.eventId, eventIds))
+      ).length,
+      20,
+    );
+  } finally {
+    const keys = [
+      `analytics:proxy:${identity}`,
+      `analytics:proxy:${identity}:PRODUCT_VIEW:product:${slug}`,
+    ].map((key) =>
+      createHmac('sha256', config.rateLimitSecret).update(key).digest('hex'),
+    );
+    await db.client
+      .delete(authRateLimits)
+      .where(inArray(authRateLimits.keyHash, keys));
+  }
 });
 void test('concurrent duplicate delivery is idempotent and event rows contain no PII columns', async () => {
   const event = {

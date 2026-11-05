@@ -15,6 +15,7 @@ import { loadConfig } from '../src/config.js';
 import { configureApplication } from '../src/http.js';
 import { Database } from '../src/database.js';
 import { runMigrations } from '../src/db/migrate.js';
+import { cleanupExpired } from '../src/db/cleanup.js';
 import { AuthService } from '../src/auth/service.js';
 import { ShopsService } from '../src/shops/service.js';
 import { SellerCatalogService } from '../src/catalogue/seller.service.js';
@@ -521,9 +522,128 @@ void test('database rejects cross-shop product/variant associations and invalid 
         .where(eq(customerRequests.id, row.id)),
     );
 });
-void test('rate limits use normalized phone and real socket, not forwarded headers', async () => {
+void test('bounded PII erasure is idempotent, preserves audit fields and honors legal hold', async () => {
+  const now = new Date('2026-09-28T12:00:00.000Z');
+  const hash = () => randomUUID().replaceAll('-', '').repeat(2);
+  const ids = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  const common = {
+    shopId: shopA,
+    productId: productA,
+    name: 'Retention customer',
+    phone: '+77005554433',
+    productName: 'Lead A',
+    quantity: 1,
+    consentVersion: PRIVACY_VERSION,
+    status: 'CONFIRMED' as const,
+    statusChangedBy: a.user.id,
+  };
+  await db.client.insert(customerRequests).values([
+    {
+      ...common,
+      id: ids[0],
+      submissionHash: hash(),
+      dedupHash: hash(),
+      comment: 'Erase me',
+      createdAt: new Date(now.getTime() - 40 * 86_400_000),
+    },
+    {
+      ...common,
+      id: ids[1],
+      submissionHash: hash(),
+      dedupHash: hash(),
+      createdAt: new Date(now.getTime() - 39 * 86_400_000),
+    },
+    {
+      ...common,
+      id: ids[2],
+      submissionHash: hash(),
+      dedupHash: hash(),
+      legalHold: true,
+      createdAt: new Date(now.getTime() - 50 * 86_400_000),
+    },
+    {
+      ...common,
+      id: ids[3],
+      submissionHash: hash(),
+      dedupHash: hash(),
+      createdAt: new Date(now.getTime() - 20 * 86_400_000),
+    },
+  ]);
+  const cleanup = () =>
+    db.client.transaction(async (tx) => {
+      // A nested-loop semi-join may re-run IN (SELECT ... LIMIT ... FOR UPDATE)
+      // after each mutation. Explicit CTE materialization must bound the batch
+      // even when the planner cannot use a hash join or implicit materialization.
+      await tx.execute(sql`SET LOCAL enable_hashjoin = off`);
+      await tx.execute(sql`SET LOCAL enable_mergejoin = off`);
+      await tx.execute(sql`SET LOCAL enable_material = off`);
+      return cleanupExpired(tx, {
+        customerRequestRetentionDays: 30,
+        customerRequestBatchSize: 1,
+        now,
+      });
+    });
+  assert.equal((await cleanup()).erasedCustomerRequests, 1);
+  assert.equal((await cleanup()).erasedCustomerRequests, 1);
+  assert.equal((await cleanup()).erasedCustomerRequests, 0);
+  const rows = await db.client
+    .select()
+    .from(customerRequests)
+    .where(inArray(customerRequests.id, ids));
+  for (const id of ids.slice(0, 2)) {
+    const row = rows.find((candidate) => candidate.id === id)!;
+    assert.equal(row.name, 'Данные удалены');
+    assert.equal(row.phone, '+10000000000');
+    assert.equal(row.comment, null);
+    assert.equal(row.status, 'CONFIRMED');
+    assert.equal(row.statusChangedBy, a.user.id);
+    assert.equal(row.productId, productA);
+    assert.equal(row.consentVersion, PRIVACY_VERSION);
+    assert.equal(row.personalDataErasedAt?.toISOString(), now.toISOString());
+  }
+  const held = rows.find((row) => row.id === ids[2])!;
+  const recent = rows.find((row) => row.id === ids[3])!;
+  assert.equal(held.name, 'Retention customer');
+  assert.equal(held.personalDataErasedAt, null);
+  assert.equal(recent.name, 'Retention customer');
+  assert.equal(recent.personalDataErasedAt, null);
+});
+void test('expired rate bucket deletion cannot exceed its batch under a rescanning query plan', async () => {
+  const keys = Array.from({ length: 1003 }, () =>
+    randomUUID().replaceAll('-', '').repeat(2),
+  );
+  await db.client.insert(authRateLimits).values(
+    keys.map((keyHash) => ({
+      keyHash,
+      hits: 1,
+      windowEndsAt: new Date('2000-01-01T00:00:00Z'),
+    })),
+  );
+  try {
+    const result = await db.client.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL enable_hashjoin = off`);
+      await tx.execute(sql`SET LOCAL enable_mergejoin = off`);
+      await tx.execute(sql`SET LOCAL enable_material = off`);
+      return cleanupExpired(tx);
+    });
+    assert.equal(result.rateBuckets, 1000);
+    const remaining = await db.client
+      .select({ key: authRateLimits.keyHash })
+      .from(authRateLimits)
+      .where(inArray(authRateLimits.keyHash, keys));
+    assert.ok(
+      remaining.length >= 3,
+      'one cleanup cannot delete all 1003 fixture buckets',
+    );
+  } finally {
+    await db.client
+      .delete(authRateLimits)
+      .where(inArray(authRateLimits.keyHash, keys));
+  }
+});
+void test('rate limits use normalized phone and trusted client identity, not forwarded headers', async () => {
   const key = createHmac('sha256', config.rateLimitSecret)
-    .update('lead:POST:ip:127.0.0.1')
+    .update('lead:POST:client:socket:127.0.0.1')
     .digest('hex');
   await db.client.delete(authRateLimits).where(eq(authRateLimits.keyHash, key));
   const data = body();
@@ -572,6 +692,8 @@ if (process.env.QRG_TEST_BUILT_REQUESTS === 'true')
           ...process.env,
           NODE_ENV: 'production',
           QRG_API_ORIGIN: base,
+          QRG_INTERNAL_PROXY_SECRET:
+            'test-internal-proxy-secret-at-least-32-characters',
           QRG_APP_ORIGIN: config.appOrigin,
           QRG_DEV_FIXTURES: 'false',
         },

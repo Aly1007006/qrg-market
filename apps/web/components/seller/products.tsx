@@ -7,9 +7,11 @@ export async function SellerProducts({
   shopId,
   csrf,
   query,
+  shopStatus,
 }: {
   shopId: string;
   csrf: string;
+  shopStatus: string;
   query: Record<string, string | string[] | undefined>;
 }) {
   const parameters = new URLSearchParams({ limit: '20' });
@@ -89,7 +91,9 @@ export async function SellerProducts({
         >
           <option value="">Все статусы</option>
           <option value="DRAFT">Черновик / скрыт</option>
-          <option value="PUBLISHED">Опубликован</option>
+          <option value="PUBLISHED">
+            {shopStatus === 'ACTIVE' ? 'Опубликован' : 'Готов к публикации'}
+          </option>
           <option value="ARCHIVED">В архиве</option>
         </Select>
         <Select
@@ -113,10 +117,14 @@ export async function SellerProducts({
           <option value="price-desc">Сначала дороже</option>
         </Select>
         <Button>Показать</Button>
+        <Link className="button button-quiet" href={href}>
+          Сбросить фильтры
+        </Link>
       </form>
       <ProductList
         shopId={shopId}
         csrf={csrf}
+        shopStatus={shopStatus}
         rows={rows.map(
           (row) =>
             ({

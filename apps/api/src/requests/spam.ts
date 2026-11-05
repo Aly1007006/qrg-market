@@ -10,6 +10,7 @@ import {
 import type { Request } from 'express';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { AuthRateLimiter } from '../auth/rate-limiter.js';
+import { clientIdentity } from '../auth/client-identity.js';
 export function challengeFor(
   productId: string,
   secret: string,
@@ -84,11 +85,12 @@ export class ConfiguredCaptchaPolicy extends CaptchaVerifier {
 export class RequestSpamGuard implements CanActivate {
   constructor(
     @Inject(AuthRateLimiter) private readonly limiter: AuthRateLimiter,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<Request>();
     await this.limiter.consume(
-      `lead:${request.method}:ip:${request.socket.remoteAddress ?? 'unknown'}`,
+      `lead:${request.method}:client:${clientIdentity(request, this.config)}`,
       request.method === 'GET' ? 120 : 30,
     );
     return true;

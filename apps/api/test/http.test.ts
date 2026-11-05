@@ -158,6 +158,7 @@ void test('Swagger is absent under production configuration', async () => {
     DATABASE_URL: config.databaseUrl,
     APP_ORIGIN: 'https://qrg.example',
     AUTH_RATE_LIMIT_SECRET: 'test-rate-limit-secret-at-least-32-characters',
+    INTERNAL_PROXY_SECRET: 'test-internal-proxy-secret-at-least-32-characters',
   });
   const prod = await NestFactory.create<NestExpressApplication>(
     AppModule.register(production),

@@ -3,7 +3,7 @@ import { paidFixtures, removeBillingFixtures } from './billing-fixtures.js';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,6 +28,7 @@ import {
   users,
   shopLocations,
   shopMembers,
+  authRateLimits,
 } from '../src/db/schema.js';
 
 interface Product {
@@ -341,6 +342,51 @@ void describe(
       assert.equal((await catalog({ q: "' OR 1=1 --" })).total, 0);
       assert.equal((await catalog({ q: '%_' })).total, 0);
       assert.equal((await catalog({ q: 'несуществующийтовар' })).total, 0);
+    });
+    void test('autocomplete is bounded by a trusted client proof, not forwarded headers', async () => {
+      const identity = 'b'.repeat(64);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signature = createHmac('sha256', config.internalProxySecret)
+        .update(`${timestamp}.${identity}`)
+        .digest('hex');
+      const key = `search:client:proxy:${identity}`;
+      try {
+        for (let i = 0; i < 60; i++) {
+          const response = await fetch(
+            base +
+              '/api/v1/public/search/suggestions?q=' +
+              encodeURIComponent(run),
+            {
+              headers: {
+                'x-qrg-client-id': identity,
+                'x-qrg-client-proof': `${timestamp}.${signature}`,
+                'x-forwarded-for': `${i}.0.0.1`,
+              },
+            },
+          );
+          assert.equal(response.status, 200);
+        }
+        const blocked = await fetch(
+          base +
+            '/api/v1/public/search/suggestions?q=' +
+            encodeURIComponent(run),
+          {
+            headers: {
+              'x-qrg-client-id': identity,
+              'x-qrg-client-proof': `${timestamp}.${signature}`,
+              'x-forwarded-for': '8.8.8.8',
+            },
+          },
+        );
+        assert.equal(blocked.status, 429);
+      } finally {
+        const keyHash = createHmac('sha256', config.rateLimitSecret)
+          .update(key)
+          .digest('hex');
+        await db.client
+          .delete(authRateLimits)
+          .where(eq(authRateLimits.keyHash, keyHash));
+      }
     });
     void test('renaming related records refreshes the indexed search document', async () => {
       await db.client
@@ -677,6 +723,8 @@ void describe(
               ...process.env,
               NODE_ENV: 'production',
               QRG_API_ORIGIN: base,
+              QRG_INTERNAL_PROXY_SECRET:
+                'test-internal-proxy-secret-at-least-32-characters',
               QRG_DEV_FIXTURES: 'true',
               QRG_SITE_URL: 'https://qrg.example.test',
               QRG_MEDIA_ORIGIN: '',

@@ -1,6 +1,10 @@
-import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Query, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { Public } from '../auth/metadata.js';
+import { AuthRateLimiter } from '../auth/rate-limiter.js';
+import { clientIdentity } from '../auth/client-identity.js';
+import { APP_CONFIG, type AppConfig } from '../config.js';
 import { AutocompleteQueryDto, CatalogQueryDto } from './dto.js';
 import { PublicCatalogService } from './public.service.js';
 @Public()
@@ -10,6 +14,8 @@ export class PublicCatalogController {
   constructor(
     @Inject(PublicCatalogService)
     private readonly service: PublicCatalogService,
+    @Inject(AuthRateLimiter) private readonly limiter: AuthRateLimiter,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
   @Get('catalog') catalog(@Query() query: CatalogQueryDto) {
     return this.service.catalog(query);
@@ -46,7 +52,14 @@ export class PublicCatalogController {
     query.shop = slug;
     return this.service.catalog(query);
   }
-  @Get('search/suggestions') suggestions(@Query() query: AutocompleteQueryDto) {
+  @Get('search/suggestions') async suggestions(
+    @Query() query: AutocompleteQueryDto,
+    @Req() request: Request,
+  ) {
+    await this.limiter.consume(
+      `search:client:${clientIdentity(request, this.config)}`,
+      60,
+    );
     return this.service.suggestions(query.q);
   }
 }

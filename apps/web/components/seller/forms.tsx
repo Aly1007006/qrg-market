@@ -2,6 +2,8 @@
 import { useState, useId, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, Select } from '../ui';
+import { SellerApiError, loginErrorMessage } from '../../lib/seller/errors';
+import { imageSelectionError } from '../../lib/seller/guidance';
 
 export async function mutate(
   path: string,
@@ -21,6 +23,11 @@ export async function mutate(
     },
     body: upload ? body : JSON.stringify(body),
     credentials: 'same-origin',
+  }).catch(() => {
+    throw new SellerApiError(
+      0,
+      'Нет связи с сервером. Проверьте интернет и повторите действие. Введённые данные остаются в форме.',
+    );
   });
   if (!response.ok) {
     const messages: Record<number, string> = {
@@ -34,7 +41,8 @@ export async function mutate(
       429: 'Слишком много запросов. Попробуйте позже.',
       503: 'Сервис ещё не настроен. Обратитесь к владельцу QRG.',
     };
-    throw new Error(
+    throw new SellerApiError(
+      response.status,
       messages[response.status] ?? 'Не удалось сохранить. Попробуйте снова.',
     );
   }
@@ -44,10 +52,19 @@ export function LoginForm() {
   const [signup, setSignup] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
+    if (signup && data.get('password') !== data.get('passwordConfirmation')) {
+      setMessage('Пароли не совпадают. Проверьте повторный ввод.');
+      const confirmation = e.currentTarget.elements.namedItem(
+        'passwordConfirmation',
+      );
+      if (confirmation instanceof HTMLInputElement) confirmation.focus();
+      return;
+    }
     setBusy(true);
     setMessage('');
     try {
@@ -65,7 +82,7 @@ export function LoginForm() {
         router.refresh();
       }
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Ошибка');
+      setMessage(loginErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -85,12 +102,37 @@ export function LoginForm() {
         id="password"
         label="Пароль"
         name="password"
-        type="password"
+        type={showPassword ? 'text' : 'password'}
         minLength={12}
         maxLength={128}
         autoComplete={signup ? 'new-password' : 'current-password'}
         required
+        aria-describedby="password-help"
       />
+      <p id="password-help" className="muted">
+        Используйте от 12 до 128 символов. Не используйте пароль от других
+        сайтов.
+      </p>
+      {signup && (
+        <Input
+          id="password-confirmation"
+          label="Повторите пароль"
+          name="passwordConfirmation"
+          type={showPassword ? 'text' : 'password'}
+          autoComplete="new-password"
+          minLength={12}
+          maxLength={128}
+          required
+        />
+      )}
+      <Button
+        type="button"
+        variant="quiet"
+        aria-pressed={showPassword}
+        onClick={() => setShowPassword(!showPassword)}
+      >
+        {showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+      </Button>
       <Button disabled={busy}>
         {busy ? 'Подождите…' : signup ? 'Создать аккаунт' : 'Войти'}
       </Button>
@@ -118,6 +160,12 @@ export interface Field {
   required?: boolean;
   options?: { value: string; label: string }[];
   maxLength?: number;
+  hint?: string;
+  placeholder?: string;
+  advanced?: boolean;
+  min?: number;
+  max?: number;
+  step?: string;
 }
 export function SellerForm({
   path,
@@ -127,6 +175,7 @@ export function SellerForm({
   label = 'Сохранить',
   redirectTo,
   numeric = [],
+  successMessage = 'Изменения сохранены',
 }: {
   path: string;
   method?: string;
@@ -135,6 +184,7 @@ export function SellerForm({
   label?: string;
   redirectTo?: string;
   numeric?: string[];
+  successMessage?: string;
 }) {
   const formId = useId();
   const [message, setMessage] = useState('');
@@ -159,7 +209,7 @@ export function SellerForm({
     }
     try {
       await mutate(path, method, body, csrf);
-      setMessage('Сохранено');
+      setMessage(successMessage);
       if (redirectTo) router.replace(redirectTo);
       router.refresh();
     } catch (e) {
@@ -169,39 +219,93 @@ export function SellerForm({
     }
   }
   return (
-    <form onSubmit={submit} className="seller-form">
-      {fields.map((f) =>
-        f.type === 'hidden' ? (
-          <input key={f.name} type="hidden" name={f.name} value={f.value} />
-        ) : f.options ? (
-          <Select
+    <form onSubmit={submit} className="seller-form" aria-busy={busy}>
+      {[false, true].map((advanced) => {
+        const group = fields.filter(
+          (field) => Boolean(field.advanced) === advanced,
+        );
+        if (!group.length) return null;
+        const inputs = group.map((f) => (
+          <div
             key={f.name}
-            id={formId + f.name}
-            name={f.name}
-            label={f.label}
-            defaultValue={f.value}
-            required={f.required}
+            className={f.type === 'hidden' ? undefined : 'seller-field-group'}
           >
-            {f.options.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
+            {f.type === 'hidden' ? (
+              <input key={f.name} type="hidden" name={f.name} value={f.value} />
+            ) : f.options ? (
+              <Select
+                key={f.name}
+                id={formId + f.name}
+                name={f.name}
+                label={f.label}
+                defaultValue={f.value}
+                required={f.required}
+                disabled={busy}
+                aria-describedby={
+                  f.hint ? formId + f.name + '-help' : undefined
+                }
+              >
+                {f.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            ) : f.type === 'textarea' ? (
+              <label key={f.name} className="field" htmlFor={formId + f.name}>
+                <span>{f.label}</span>
+                <textarea
+                  id={formId + f.name}
+                  name={f.name}
+                  defaultValue={f.value}
+                  required={f.required}
+                  maxLength={f.maxLength}
+                  rows={6}
+                  disabled={busy}
+                  placeholder={f.placeholder}
+                  aria-describedby={
+                    f.hint ? formId + f.name + '-help' : undefined
+                  }
+                />
+              </label>
+            ) : (
+              <Input
+                key={f.name}
+                id={formId + f.name}
+                name={f.name}
+                label={f.label}
+                type={f.type ?? 'text'}
+                defaultValue={f.value}
+                required={f.required}
+                maxLength={f.maxLength}
+                disabled={busy}
+                placeholder={f.placeholder}
+                aria-describedby={
+                  f.hint ? formId + f.name + '-help' : undefined
+                }
+                {...(f.type === 'number'
+                  ? { min: f.min ?? 0, max: f.max, step: f.step ?? '0.01' }
+                  : {})}
+              />
+            )}
+            {f.hint && (
+              <p className="field-help" id={formId + f.name + '-help'}>
+                {f.hint}
+              </p>
+            )}
+          </div>
+        ));
+        return advanced ? (
+          <details key="advanced" className="seller-advanced">
+            <summary>Дополнительные поля — можно не заполнять</summary>
+            {inputs}
+          </details>
         ) : (
-          <Input
-            key={f.name}
-            id={formId + f.name}
-            name={f.name}
-            label={f.label}
-            type={f.type ?? 'text'}
-            defaultValue={f.value}
-            required={f.required}
-            maxLength={f.maxLength}
-            {...(f.type === 'number' ? { min: 0, step: '0.01' } : {})}
-          />
-        ),
-      )}
+          <div key="main" className="seller-form-fields">
+            {inputs}
+          </div>
+        );
+      })}
       <Button disabled={busy}>{busy ? 'Подождите…' : label}</Button>
       <p role="status">{message}</p>
     </form>
@@ -221,14 +325,16 @@ export function ImageUpload({
   const inputId = useId();
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<File | null>(null);
   const router = useRouter();
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const body = new FormData(form);
     const file = body.get('file');
-    if (!(file instanceof File) || file.size > 10 * 1024 * 1024) {
-      setMessage('Выберите файл до 10 MB.');
+    const error = imageSelectionError(file instanceof File ? file : null);
+    if (error) {
+      setMessage(error);
       return;
     }
     setBusy(true);
@@ -236,7 +342,10 @@ export function ImageUpload({
     try {
       await mutate(path, 'POST', body, csrf);
       form.reset();
-      setMessage('Изображение добавлено');
+      setSelected(null);
+      setMessage(
+        'Фото загружено и сохранено. Оно появится выше после обновления.',
+      );
       router.refresh();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Ошибка');
@@ -245,7 +354,11 @@ export function ImageUpload({
     }
   }
   return (
-    <form className="seller-form" onSubmit={submit}>
+    <form
+      className="seller-form seller-upload"
+      onSubmit={submit}
+      aria-busy={busy}
+    >
       <Input
         id={inputId}
         name="file"
@@ -258,9 +371,33 @@ export function ImageUpload({
         accept="image/jpeg,image/png,image/webp"
         required
         disabled={busy || count >= 10}
+        aria-describedby={inputId + '-help'}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0] ?? null;
+          setSelected(file);
+          setMessage(file ? (imageSelectionError(file) ?? '') : '');
+        }}
       />
-      <Button disabled={busy || count >= 10}>
-        {busy ? 'Обрабатываем…' : 'Загрузить фото'}
+      <p className="field-help" id={inputId + '-help'}>
+        {count >= 10
+          ? 'Добавлено 10 фото. Чтобы загрузить другое, сначала удалите одно из текущих.'
+          : '1. Выберите файл. 2. Нажмите «Загрузить и сохранить фото». Выбор файла сам по себе его не сохраняет.'}
+      </p>
+      {selected && (
+        <p className="upload-selection">
+          Выбрано: <strong>{selected.name}</strong> ·{' '}
+          {(selected.size / 1024 / 1024).toFixed(2)} MB
+        </p>
+      )}
+      <Button
+        disabled={
+          busy ||
+          count >= 10 ||
+          !selected ||
+          Boolean(imageSelectionError(selected))
+        }
+      >
+        {busy ? 'Проверяем и сохраняем фото…' : 'Загрузить и сохранить фото'}
       </Button>
       <p role="status">{message}</p>
     </form>

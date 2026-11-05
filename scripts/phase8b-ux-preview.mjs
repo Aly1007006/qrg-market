@@ -198,6 +198,8 @@ try {
         ...process.env,
         NODE_ENV: 'production',
         QRG_API_ORIGIN: await app.getUrl(),
+        QRG_INTERNAL_PROXY_SECRET:
+          'test-internal-proxy-secret-at-least-32-characters',
         QRG_APP_ORIGIN: config.appOrigin,
         QRG_DEV_FIXTURES: 'false',
       },

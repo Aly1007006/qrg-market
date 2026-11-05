@@ -3,6 +3,7 @@ import {
   adminCookie,
   apiOrigin,
 } from '../../../../lib/admin/boundary';
+import { internalClientHeaders } from '../../../../lib/internal-client';
 async function proxy(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
@@ -54,6 +55,7 @@ async function proxy(
       method: request.method,
       headers: {
         cookie: adminCookie(request.headers.get('cookie')),
+        ...internalClientHeaders(request),
         ...(unsafe
           ? {
               origin,

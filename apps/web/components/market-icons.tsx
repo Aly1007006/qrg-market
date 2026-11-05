@@ -1,5 +1,37 @@
 import type { ReactNode } from 'react';
 const paths: Record<string, ReactNode> = {
+  store: (
+    <>
+      <path d="M3 10h18l-2-7H5l-2 7Zm2 0v11h14V10M9 21v-7h6v7" />
+      <path d="M3 10c0 3 4 3 4 0 0 3 5 3 5 0 0 3 5 3 5 0 0 3 4 3 4 0" />
+    </>
+  ),
+  message: (
+    <path d="M21 15a3 3 0 0 1-3 3H8l-5 4V5a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v10Z" />
+  ),
+  card: (
+    <>
+      <rect x="2" y="4" width="20" height="16" rx="3" />
+      <path d="M2 9h20M6 15h4" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="7" r="3" />
+      <path d="M2 21v-3a7 7 0 0 1 14 0v3M17 4a3 3 0 0 1 0 6m3 11v-3a7 7 0 0 0-3-6" />
+    </>
+  ),
+  settings: (
+    <>
+      <path d="m9 3-1 3-3 1-2 4 2 2-1 3 3 3 3-1 2 3 4-2 1-3 3-1v-4l-3-1-1-3-4-1-3 1Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M12 5v16M12 5C8 2 3 3 3 3v16s5-1 9 2c4-3 9-2 9-2V3s-5-1-9 2Z" />
+    </>
+  ),
   search: (
     <>
       <circle cx="10.5" cy="10.5" r="6.5" />

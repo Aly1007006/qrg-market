@@ -16,6 +16,8 @@ import { Public, CurrentSession, type Principal } from '../auth/metadata.js';
 import { AuthRateLimiter } from '../auth/rate-limiter.js';
 import { AnalyticsService } from './service.js';
 import { AnalyticsEventDto, AnalyticsQueryDto } from './dto.js';
+import { APP_CONFIG, type AppConfig } from '../config.js';
+import { clientIdentity } from '../auth/client-identity.js';
 
 @Public()
 @ApiTags('internal analytics collection')
@@ -24,14 +26,17 @@ export class PublicAnalyticsController {
   constructor(
     @Inject(AnalyticsService) private readonly service: AnalyticsService,
     @Inject(AuthRateLimiter) private readonly limiter: AuthRateLimiter,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
   @Post()
   @HttpCode(202)
   async record(@Body() event: AnalyticsEventDto, @Req() request: Request) {
     // Expiring HMAC throttle only, never stored in analytics. No forwarded IP trust.
+    const identity = clientIdentity(request, this.config);
+    await this.limiter.consume(`analytics:${identity}`, 120);
     await this.limiter.consume(
-      `analytics:${request.socket.remoteAddress ?? 'unknown'}:${Math.floor(Date.now() / 900000)}`,
-      5000,
+      `analytics:${identity}:${event.type}:${event.resource}:${event.slug}`,
+      event.type.endsWith('_CLICK') ? 10 : 20,
     );
     return this.service.record(event);
   }

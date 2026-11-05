@@ -22,6 +22,7 @@ export async function SellerRequests({
   if (detail) {
     const r = record(await sellerRead(base + '/' + detail));
     const status = string(r.status);
+    const personalDataErased = r.personalDataErasedAt != null;
     return (
       <>
         <Link href={href}>← Все заявки</Link>
@@ -35,7 +36,11 @@ export async function SellerRequests({
           <div>
             <dt>Телефон</dt>
             <dd>
-              <a href={'tel:' + string(r.phone)}>{string(r.phone)}</a>
+              {personalDataErased ? (
+                'Удалён по политике хранения'
+              ) : (
+                <a href={'tel:' + string(r.phone)}>{string(r.phone)}</a>
+              )}
             </dd>
           </div>
           <div>
@@ -51,7 +56,9 @@ export async function SellerRequests({
             <dd>
               {r.pickupPreference === 'SHOP_PICKUP'
                 ? 'В магазине'
-                : 'Обсудить с покупателем'}
+                : personalDataErased
+                  ? 'Данные удалены'
+                  : 'Обсудить с покупателем'}
             </dd>
           </div>
           <div>
@@ -59,8 +66,18 @@ export async function SellerRequests({
             <dd>{new Date(string(r.createdAt)).toLocaleString('ru-RU')}</dd>
           </div>
         </dl>
+        {personalDataErased && (
+          <p className="notice" role="status">
+            Персональные данные покупателя автоматически обезличены. Статус,
+            товар и запись согласия сохранены для целостности истории.
+          </p>
+        )}
         <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-          {r.comment == null ? 'Без комментария' : string(r.comment)}
+          {personalDataErased
+            ? 'Комментарий удалён'
+            : r.comment == null
+              ? 'Без комментария'
+              : string(r.comment)}
         </p>
         <p className="payment-note">
           «Обращение подтверждено» означает подтверждение заявки продавцом, а не

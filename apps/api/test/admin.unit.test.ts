@@ -18,6 +18,7 @@ void test('admin cookies are distinct, HttpOnly, Strict and Secure in production
     DATABASE_URL: 'postgresql://user:local@localhost/test',
     APP_ORIGIN: 'https://qrg.example.test',
     AUTH_RATE_LIMIT_SECRET: 'local-test-only-32-character-secret-string',
+    INTERNAL_PROXY_SECRET: 'test-internal-proxy-secret-at-least-32-characters',
   });
   assert.equal(adminCookieName(config), '__Host-qrg_admin');
   assert.deepEqual(adminCookieOptions(config), {

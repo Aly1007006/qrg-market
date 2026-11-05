@@ -12,19 +12,30 @@ jobs:
       NEXT_TELEMETRY_DISABLED: '1'
       DATABASE_URL: postgresql://qrg_local:local-only-change-me@127.0.0.1:5432/qrg_market_test
       DATABASE_SSL: 'false'
+      QRG_INTERNAL_PROXY_SECRET: ci-only-internal-proxy-secret-at-least-32-characters
+      INTERNAL_PROXY_SECRET: ci-only-internal-proxy-secret-at-least-32-characters
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .node-version
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11.26.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Scan repository for secrets and IaC misconfiguration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          skip-dirs: node_modules,apps/web/.next,.tools
       - run: pnpm source:check
       - run: pnpm format:check
       - run: pnpm typecheck
@@ -65,10 +76,36 @@ jobs:
       - run: pnpm test:catalog:smoke
       - run: pnpm test:web:preview
       - run: pnpm audit --prod --audit-level=high
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+      - name: Validate production Terraform
+        working-directory: infra/terraform/environments/production
+        run: |
+          terraform fmt -check -recursive ../../..
+          terraform init -backend=false -input=false
+          terraform validate
       - name: Build production images
         run: |
-          docker build --target api -t qrg-api:ci .
-          docker build --target web -t qrg-web:ci .
+          docker build --target api -t qrg-api:${{ github.sha }} .
+          docker build --target web -t qrg-web:${{ github.sha }} .
+      - name: Scan API production image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: qrg-api:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Scan web production image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: qrg-web:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          exit-code: '1'
       - name: Stop local services
         if: always()
         run: docker compose --env-file .env.example -f compose.yaml -f compose.host.yaml down

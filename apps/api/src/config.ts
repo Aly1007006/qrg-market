@@ -6,6 +6,9 @@ export interface AppConfig {
   readonly swaggerEnabled: boolean;
   readonly appOrigin: string;
   readonly rateLimitSecret: string;
+  readonly internalProxySecret: string;
+  readonly customerRequestsEnabled: boolean;
+  readonly customerRequestRetentionDays: number | null;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -90,6 +93,51 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       'AUTH_RATE_LIMIT_SECRET must be 32-128 characters and separately configured in production',
     );
   }
+  const localProxySecret =
+    'local-development-internal-proxy-key-not-for-production';
+  const internalProxySecret =
+    env.INTERNAL_PROXY_SECRET ??
+    (environment === 'production' ? '' : localProxySecret);
+  if (
+    internalProxySecret.length < 32 ||
+    internalProxySecret.length > 128 ||
+    (environment === 'production' && internalProxySecret === localProxySecret)
+  ) {
+    throw new Error(
+      'INTERNAL_PROXY_SECRET must be 32-128 characters and separately configured in production',
+    );
+  }
+  const customerRequestsSetting =
+    env.CUSTOMER_REQUESTS_ENABLED ??
+    (environment === 'production' ? 'false' : 'true');
+  if (!['true', 'false'].includes(customerRequestsSetting)) {
+    throw new Error('CUSTOMER_REQUESTS_ENABLED must be true or false');
+  }
+  const customerRequestsEnabled = customerRequestsSetting === 'true';
+  const retentionText = env.CUSTOMER_REQUEST_RETENTION_DAYS?.trim() ?? '';
+  const customerRequestRetentionDays = retentionText
+    ? Number(retentionText)
+    : null;
+  if (
+    customerRequestRetentionDays !== null &&
+    (!/^\d+$/.test(retentionText) ||
+      !Number.isInteger(customerRequestRetentionDays) ||
+      customerRequestRetentionDays < 1 ||
+      customerRequestRetentionDays > 3650)
+  ) {
+    throw new Error(
+      'CUSTOMER_REQUEST_RETENTION_DAYS must be an integer between 1 and 3650',
+    );
+  }
+  if (
+    environment === 'production' &&
+    customerRequestsEnabled &&
+    customerRequestRetentionDays === null
+  ) {
+    throw new Error(
+      'Production customer requests require an explicitly approved retention period',
+    );
+  }
   return Object.freeze({
     environment: environment as AppConfig['environment'],
     port,
@@ -98,5 +146,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     swaggerEnabled: swagger === 'true',
     appOrigin: appOrigin.origin,
     rateLimitSecret,
+    internalProxySecret,
+    customerRequestsEnabled,
+    customerRequestRetentionDays,
   });
 }

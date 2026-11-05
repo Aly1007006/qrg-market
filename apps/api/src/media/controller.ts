@@ -35,6 +35,7 @@ import {
   type AuthenticatedRequest,
 } from '../auth/metadata.js';
 import { MediaService } from './service.js';
+import { AuthRateLimiter } from '../auth/rate-limiter.js';
 import {
   IMAGE_MIMES,
   MAX_IMAGE_BYTES,
@@ -43,7 +44,10 @@ import {
 const uuid = () => new ParseUUIDPipe({ version: '4' });
 @Injectable()
 export class ImageAccessGuard implements CanActivate {
-  constructor(@Inject(MediaService) private readonly media: MediaService) {}
+  constructor(
+    @Inject(MediaService) private readonly media: MediaService,
+    @Inject(AuthRateLimiter) private readonly limiter: AuthRateLimiter,
+  ) {}
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     if (!req.principal) throw new UnauthorizedException();
@@ -59,13 +63,20 @@ export class ImageAccessGuard implements CanActivate {
       )
     )
       throw new BadRequestException();
+    await this.limiter.consume(
+      `upload:product:user:${req.principal.userId}`,
+      30,
+    );
     await this.media.preflight(req.principal, shop, id);
     return true;
   }
 }
 @Injectable()
 export class ShopImageAccessGuard implements CanActivate {
-  constructor(@Inject(MediaService) private readonly media: MediaService) {}
+  constructor(
+    @Inject(MediaService) private readonly media: MediaService,
+    @Inject(AuthRateLimiter) private readonly limiter: AuthRateLimiter,
+  ) {}
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     if (!req.principal) throw new UnauthorizedException();
@@ -77,6 +88,7 @@ export class ShopImageAccessGuard implements CanActivate {
       !['logo', 'cover'].includes(String(req.params.kind))
     )
       throw new BadRequestException();
+    await this.limiter.consume(`upload:shop:user:${req.principal.userId}`, 30);
     await this.media.shopPreflight(req.principal, req.params.shopId);
     return true;
   }

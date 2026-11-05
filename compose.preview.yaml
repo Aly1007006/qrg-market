@@ -1,0 +1,34 @@
+# Temporary read-only demonstration. No database, secrets or application networks.
+name: qrg-market-public-preview
+services:
+  preview:
+    image: qrg-market-public-preview:fixture
+    build:
+      context: .
+      target: public-preview
+    command: [node, scripts/public-preview-gateway.mjs]
+    user: '1000:1000'
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/apps/web:uid=1000,gid=1000,mode=0700
+    networks: [preview]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    init: true
+    mem_limit: 2g
+    cpus: 2
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+    command: [tunnel, --no-autoupdate, --url, 'http://preview:8080']
+    networks: [preview, outbound]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    depends_on: [preview]
+    mem_limit: 128m
+networks:
+  preview:
+    internal: true
+  outbound:

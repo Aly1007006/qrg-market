@@ -12,4 +12,26 @@ coverage/
 .pnpm-store/
 .tools/
 .docker-local/
+output/
 *.log
+
+# Terraform working data and plans can contain credentials or sensitive values.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# Private keys and local credential material never belong in Git.
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json

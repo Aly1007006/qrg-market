@@ -1,0 +1,4 @@
+ALTER TABLE "customer_requests" ADD COLUMN "legal_hold" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "customer_requests" ADD COLUMN "personal_data_erased_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "requests_retention_idx" ON "customer_requests" USING btree ("created_at","id") WHERE "customer_requests"."legal_hold" = false AND "customer_requests"."personal_data_erased_at" IS NULL;--> statement-breakpoint
+ALTER TABLE "customer_requests" ADD CONSTRAINT "requests_retention_state_valid" CHECK ("customer_requests"."personal_data_erased_at" IS NULL OR "customer_requests"."legal_hold" = false);

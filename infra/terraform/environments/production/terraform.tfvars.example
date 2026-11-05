@@ -1,0 +1,10 @@
+cloud_id                    = "REPLACE_WITH_KZ_CLOUD_ID"
+folder_id                   = "REPLACE_WITH_DEDICATED_PRODUCTION_FOLDER_ID"
+media_bucket_name           = "REPLACE_WITH_GLOBALLY_UNIQUE_PRIVATE_BUCKET"
+postgres_resource_preset_id = "REPLACE_WITH_PRESET_VERIFIED_IN_KZ1_A"
+postgres_disk_type_id       = "REPLACE_WITH_DISK_TYPE_VERIFIED_IN_KZ1_A"
+postgres_disk_size_gb       = 50
+
+labels = {
+  owner = "qrg"
+}

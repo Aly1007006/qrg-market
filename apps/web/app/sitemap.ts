@@ -5,5 +5,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
   if (!indexingEnabled()) return [];
   const origin = siteOrigin(process.env.QRG_SITE_URL);
   if (!origin) return [];
-  return [{ url: origin + '/' }, { url: origin + '/catalog' }];
+  return [
+    { url: origin + '/' },
+    { url: origin + '/catalog' },
+    { url: origin + '/shops' },
+  ];
 }

@@ -20,6 +20,7 @@ import {
 import { AuthRateLimiter } from './rate-limiter.js';
 import { matchesCsrf, readSessionToken } from './tokens.js';
 import { ADMIN_AREA } from '../admin/metadata.js';
+import { clientIdentity } from './client-identity.js';
 
 const unsafe = (request: Request) =>
   !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
@@ -55,6 +56,7 @@ export class AuthThrottleGuard implements CanActivate {
   constructor(
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(AuthRateLimiter) private readonly limiter: AuthRateLimiter,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const action = this.reflector.getAllAndOverride<AuthAction | undefined>(
@@ -71,10 +73,10 @@ export class AuthThrottleGuard implements CanActivate {
       typeof body.email === 'string'
         ? body.email.trim().toLowerCase().slice(0, 254)
         : undefined;
-    // Forwarded headers are untrusted. Configure a trusted reverse-proxy boundary separately at deployment.
+    // Only a short-lived proof issued by the private Next boundary is trusted.
     await this.limiter.check(
       action,
-      request.socket.remoteAddress ?? 'unknown',
+      clientIdentity(request, this.config),
       email,
     );
     return true;

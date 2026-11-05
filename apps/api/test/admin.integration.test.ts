@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { paidFixtures, removeBillingFixtures } from './billing-fixtures.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -22,6 +22,7 @@ import { ShopsService } from '../src/shops/service.js';
 import {
   adminAccounts,
   adminSessions,
+  authRateLimits,
   auditLogs,
   moderationCases,
   moderationHistory,
@@ -754,6 +755,29 @@ void test('MFA brute force is throttled and forwarded headers cannot reset the b
   assert.equal(r.status, 429);
   assert.equal(r.headers.get('retry-after'), '900');
 });
+void test('anonymous admin scanning is throttled before it can grow immutable audit without bound', async () => {
+  const keyHash = createHmac('sha256', config.rateLimitSecret)
+    .update('admin-access:socket:127.0.0.1')
+    .digest('hex');
+  await db.client
+    .delete(authRateLimits)
+    .where(eq(authRateLimits.keyHash, keyHash));
+  const [before] = await db.client
+    .select({ count: sql<number>`count(*)::integer` })
+    .from(auditLogs);
+  for (let i = 0; i < 60; i++)
+    assert.equal((await request('admin/dashboard')).status, 401);
+  const blocked = await request('admin/dashboard');
+  assert.equal(blocked.status, 429);
+  assert.equal(blocked.headers.get('retry-after'), '900');
+  const [after] = await db.client
+    .select({ count: sql<number>`count(*)::integer` })
+    .from(auditLogs);
+  assert.equal((after?.count ?? 0) - (before?.count ?? 0), 60);
+  await db.client
+    .delete(authRateLimits)
+    .where(eq(authRateLimits.keyHash, keyHash));
+});
 void test('bounded admin session cleanup preserves current sessions and immutable audit', async () => {
   const marker = new Error('rollback cleanup fixture');
   await assert.rejects(
@@ -900,6 +924,8 @@ if (process.env.QRG_TEST_BUILT_ADMIN === 'true')
           ...process.env,
           NODE_ENV: 'production',
           QRG_API_ORIGIN: base,
+          QRG_INTERNAL_PROXY_SECRET:
+            'test-internal-proxy-secret-at-least-32-characters',
           QRG_APP_ORIGIN: config.appOrigin,
           QRG_DEV_FIXTURES: 'false',
         },

@@ -70,6 +70,7 @@ const fields = {
   quantity: customerRequests.quantity,
   pickupPreference: customerRequests.pickupPreference,
   comment: customerRequests.comment,
+  personalDataErasedAt: customerRequests.personalDataErasedAt,
   status: customerRequests.status,
   createdAt: customerRequests.createdAt,
   updatedAt: customerRequests.updatedAt,
@@ -87,12 +88,7 @@ export class CustomerRequestsService {
     @Inject(CaptchaVerifier) private readonly captcha: CaptchaVerifier,
     @Inject(APP_CONFIG) config: AppConfig,
   ) {
-    const enabled =
-      process.env.CUSTOMER_REQUESTS_ENABLED ??
-      (config.environment === 'production' ? 'false' : 'true');
-    if (!['true', 'false'].includes(enabled))
-      throw new Error('Invalid CUSTOMER_REQUESTS_ENABLED');
-    this.enabled = enabled === 'true';
+    this.enabled = config.customerRequestsEnabled;
   }
   async challenge(productId: string) {
     if (!this.enabled) throw new ServiceUnavailableException();

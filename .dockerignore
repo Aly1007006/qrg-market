@@ -6,6 +6,11 @@
 **/*.tsbuildinfo
 **/.env
 **/.env.*
+**/.terraform
+**/.terraform/**
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
 .tools
 .docker-local
 .pnpm-store

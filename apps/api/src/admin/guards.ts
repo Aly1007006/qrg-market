@@ -19,6 +19,7 @@ import {
   type AdminRequest,
 } from './metadata.js';
 import { readAdminToken } from './security.js';
+import { clientIdentity } from '../auth/client-identity.js';
 @Injectable()
 export class AdminGuard implements CanActivate {
   constructor(
@@ -26,6 +27,7 @@ export class AdminGuard implements CanActivate {
     @Inject(AdminAuth) private readonly auth: AdminAuth,
     @Inject(AuditLog) private readonly audit: AuditLog,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(AuthRateLimiter) private readonly limiter: AuthRateLimiter,
   ) {}
   async canActivate(ctx: ExecutionContext) {
     if (!this.reflector.get<boolean>(ADMIN_AREA, ctx.getClass())) return true;
@@ -48,6 +50,11 @@ export class AdminGuard implements CanActivate {
       req.admin = p;
       return true;
     } catch (e) {
+      // Bound append-only audit growth from anonymous scanners before writing.
+      await this.limiter.consume(
+        'admin-access:' + clientIdentity(req, this.config),
+        60,
+      );
       await this.audit.append({
         actor,
         action: 'ADMIN_ACCESS',
@@ -62,11 +69,12 @@ export class AdminGuard implements CanActivate {
 export class AdminLoginThrottle implements CanActivate {
   constructor(
     @Inject(AuthRateLimiter) private readonly limiter: AuthRateLimiter,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
   async canActivate(ctx: ExecutionContext) {
     const req = ctx.switchToHttp().getRequest<Request>();
     await this.limiter.consume(
-      'admin-login:ip:' + (req.socket.remoteAddress ?? 'unknown'),
+      'admin-login:client:' + clientIdentity(req, this.config),
       30,
     );
     const body: unknown = req.body;

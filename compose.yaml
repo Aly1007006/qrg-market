@@ -1,6 +1,7 @@
 name: qrg-market-local
 services:
   storage:
+    restart: unless-stopped
     image: chrislusf/seaweedfs:4.46
     command: [mini, '-dir=/data']
     environment:
@@ -12,6 +13,7 @@ services:
     networks: [application]
     security_opt: ['no-new-privileges:true']
   db:
+    restart: unless-stopped
     build: ./infra/postgres
     image: qrg-postgres:17-local
     environment:
@@ -28,6 +30,7 @@ services:
       retries: 20
     networks: [database]
   api:
+    restart: unless-stopped
     profiles: [app]
     image: qrg-market-local-api
     build:
@@ -41,6 +44,7 @@ services:
       DATABASE_SSL: 'false'
       SWAGGER_ENABLED: 'true'
       APP_ORIGIN: http://localhost:3000
+      INTERNAL_PROXY_SECRET: ${QRG_INTERNAL_PROXY_SECRET:?Use pnpm dev:docker or configure a random local QRG_INTERNAL_PROXY_SECRET}
       ADMIN_MFA_ENCRYPTION_KEY: ${ADMIN_MFA_ENCRYPTION_KEY:-}
       S3_ENDPOINT: http://storage:8333
       S3_REGION: us-east-1
@@ -60,7 +64,7 @@ services:
       test:
         [
           CMD,
-          node,
+          /nodejs/bin/node,
           -e,
           "fetch('http://127.0.0.1:3001/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
         ]
@@ -79,7 +83,7 @@ services:
     build:
       context: .
       target: api
-    command: [node, apps/api/dist/db/migrate-main.js]
+    command: [apps/api/dist/db/migrate-main.js]
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://qrg_local:${POSTGRES_PASSWORD}@db:5432/qrg_market
@@ -93,11 +97,13 @@ services:
     security_opt: ['no-new-privileges:true']
     networks: [database]
   web:
+    restart: unless-stopped
     profiles: [app]
     environment:
       QRG_API_ORIGIN: http://api:3001
       QRG_APP_ORIGIN: http://localhost:3000
       QRG_DEV_FIXTURES: 'false'
+      QRG_INTERNAL_PROXY_SECRET: ${QRG_INTERNAL_PROXY_SECRET:?Use pnpm dev:docker or configure a random local QRG_INTERNAL_PROXY_SECRET}
       QRG_MEDIA_ORIGIN: ${QRG_MEDIA_ORIGIN:-}
     build:
       context: .
@@ -105,7 +111,20 @@ services:
       args:
         QRG_MEDIA_ORIGIN: ${QRG_MEDIA_ORIGIN:-}
     ports: ['127.0.0.1:3000:3000']
+    healthcheck:
+      test:
+        [
+          CMD,
+          /nodejs/bin/node,
+          -e,
+          "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 8s
+      retries: 5
     init: true
+    read_only: true
+    tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
     networks: [application]

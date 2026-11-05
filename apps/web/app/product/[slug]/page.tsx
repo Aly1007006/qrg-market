@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { readProduct } from '../../../lib/catalogue/repository';
 import { pageMetadata, jsonLd } from '../../../lib/seo';
@@ -7,6 +6,9 @@ import { Badge } from '../../../components/ui';
 import { TwoGisLink } from '../../../components/two-gis-link';
 import styles from '../../../components/market.module.css';
 import { AnalyticsView } from '../../../components/analytics';
+import { requestNonce } from '../../../lib/nonce';
+import { ProductGallery } from '../../../components/product-gallery';
+import { FavoriteButton } from '../../../components/favorites';
 type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Props) {
   const { product } = await readProduct((await params).slug);
@@ -19,6 +21,7 @@ export async function generateMetadata({ params }: Props) {
 }
 export default async function ProductPage({ params }: Props) {
   const { product, shop } = await readProduct((await params).slug);
+  const nonce = await requestNonce();
   return (
     <main
       id="main-content"
@@ -28,6 +31,7 @@ export default async function ProductPage({ params }: Props) {
         <>
           <AnalyticsView resource="product" slug={product.slug} />
           <script
+            nonce={nonce}
             type="application/ld+json"
             dangerouslySetInnerHTML={{
               __html: jsonLd({
@@ -49,36 +53,16 @@ export default async function ProductPage({ params }: Props) {
       </nav>
       <div className="product-detail">
         <div>
-          <div className="detail-photo">
-            {product.image ? (
-              <Image
-                src={product.image}
-                unoptimized={product.image.startsWith('/api/images/')}
-                alt={product.imageAlt}
-                fill
-                sizes="(max-width: 760px) 92vw, 50vw"
-                loading="eager"
-                fetchPriority="high"
-              />
-            ) : (
-              <span className="no-photo">Фото пока не добавлено</span>
-            )}
-          </div>
-          {product.images && product.images.length > 1 && (
-            <div className="product-gallery" aria-label="Фотографии товара">
-              {product.images.slice(1).map((photo) => (
-                <Image
-                  key={photo.url}
-                  src={photo.url}
-                  unoptimized={photo.url.startsWith('/api/images/')}
-                  alt={photo.alt || product.name}
-                  width={400}
-                  height={500}
-                  sizes="(max-width: 760px) 44vw, 24vw"
-                />
-              ))}
-            </div>
-          )}
+          <ProductGallery
+            name={product.name}
+            photos={
+              product.images?.length
+                ? product.images.slice(0, 10)
+                : product.image
+                  ? [{ url: product.image, alt: product.imageAlt }]
+                  : []
+            }
+          />
           {product.demo !== false && (
             <p className="photo-note">
               Иллюстративная фотография. Не реальное предложение магазина.
@@ -87,8 +71,17 @@ export default async function ProductPage({ params }: Props) {
         </div>
         <section className="product-info" aria-labelledby="product-title">
           {product.demo !== false && <Badge>Демонстрационный товар</Badge>}
-          <p className="eyebrow product-brand">{product.brand}</p>
+          {product.brand && (
+            <p className="eyebrow product-brand">{product.brand}</p>
+          )}
           <h1 id="product-title">{product.name}</h1>
+          <FavoriteButton
+            kind="product"
+            slug={product.slug}
+            name={product.name}
+            scope={product.demo === false ? 'live' : 'demo'}
+            inline
+          />
           <ProductOptions product={product} />
           <p className="payment-note">
             Оплата производится напрямую продавцу. QRG MARKET не принимает
@@ -121,14 +114,12 @@ export default async function ProductPage({ params }: Props) {
             <dt>Категория</dt>
             <dd>{product.subcategory}</dd>
           </div>
-          <div>
-            <dt>Бренд</dt>
-            <dd>{product.brand}</dd>
-          </div>
-          <div>
-            <dt>Характеристики</dt>
-            <dd>Будут указаны продавцом для реального товара</dd>
-          </div>
+          {product.brand && (
+            <div>
+              <dt>Бренд</dt>
+              <dd>{product.brand}</dd>
+            </div>
+          )}
         </dl>
       </section>
     </main>

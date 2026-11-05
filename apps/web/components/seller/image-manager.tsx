@@ -52,12 +52,18 @@ export function ImageManager({
     }
   }
   return (
-    <section>
+    <section id="product-images">
       <h2>Фотографии</h2>
       <p>
         Первая фотография будет основной. Для перестановки используйте кнопки —
         это работает и на телефоне.
       </p>
+      {!sorted.length && (
+        <p className="onboarding-notice">
+          Фотографий пока нет. Выберите файл ниже и нажмите «Загрузить и
+          сохранить фото». Без этого шага картинка не появится у товара.
+        </p>
+      )}
       <div className="seller-images">
         {sorted.map((image, index) => (
           <article key={image.id}>

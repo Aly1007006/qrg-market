@@ -9,7 +9,7 @@ import {
 } from '../../lib/catalogue/model';
 import { pageMetadata } from '../../lib/seo';
 import { ProductCard } from '../../components/cards';
-import { FilterUI, SortUI } from '../../components/filters';
+import { ActiveFilters, FilterUI, SortUI } from '../../components/filters';
 import { MobileDrawer } from '../../components/mobile-drawer';
 import { Search } from '../../components/shell';
 import { EmptyState, ButtonLink } from '../../components/ui';
@@ -101,7 +101,7 @@ export default async function Catalog({
             </MobileDrawer>
             <SortUI filters={filters} />
           </div>
-          {filters.q && <p className="search-summary">Поиск: «{filters.q}»</p>}
+          <ActiveFilters data={data} filters={filters} />
           {result.items.length ? (
             <div className="product-grid">
               {result.items.map((p) => (

@@ -1,6 +1,7 @@
 import { catalogueMode, publicApi } from '../../../lib/catalogue/repository';
 import { parseSuggestions } from '../../../lib/catalogue/suggestions';
 import { publicProducts } from '../../../lib/catalogue/model';
+import { internalClientHeaders } from '../../../lib/internal-client';
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const q = params.get('q')?.trim() ?? '';
@@ -28,7 +29,10 @@ export async function GET(request: Request) {
     }
     return Response.json(
       parseSuggestions(
-        await publicApi('search/suggestions?q=' + encodeURIComponent(q)),
+        await publicApi(
+          'search/suggestions?q=' + encodeURIComponent(q),
+          internalClientHeaders(request),
+        ),
       ),
       { headers },
     );

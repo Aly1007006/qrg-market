@@ -4,8 +4,72 @@ import {
   publicProducts,
   type Catalogue,
   type Filters,
+  catalogueUrl,
 } from '../lib/catalogue/model';
 import { Button, Input, Select } from './ui';
+export function ActiveFilters({
+  data,
+  filters,
+}: {
+  data: Catalogue;
+  filters: Filters;
+}) {
+  const labels: Partial<Record<keyof Filters, string>> = {
+    q: 'Поиск',
+    category: 'Категория',
+    subcategory: 'Подкатегория',
+    brand: 'Бренд',
+    priceMin: 'Цена от',
+    priceMax: 'Цена до',
+    size: 'Размер',
+    color: 'Цвет',
+    shop: 'Бутик',
+    mall: 'ТЦ',
+    availability: 'В наличии',
+    discount: 'Со скидкой',
+  };
+  const selected = (Object.keys(labels) as (keyof Filters)[]).filter(
+    (key) => filters[key],
+  );
+  if (!selected.length) return null;
+  return (
+    <nav className="active-filters" aria-label="Выбранные фильтры">
+      {selected.map((key) => {
+        const raw = String(filters[key]);
+        const value =
+          key === 'category'
+            ? ((data.categories ?? categories).find(
+                (category) => category.slug === raw,
+              )?.name ?? raw)
+            : key === 'shop'
+              ? ((data.facets?.shops ?? data.shops).find(
+                  (shop) => shop.slug === raw,
+                )?.name ?? raw)
+              : key.startsWith('price')
+                ? raw + ' ₸'
+                : raw;
+        const label =
+          key === 'availability' || key === 'discount'
+            ? labels[key]
+            : labels[key] + ': ' + value;
+        return (
+          <Link
+            key={key}
+            href={catalogueUrl(filters, {
+              [key]: '',
+              ...(key === 'category' ? { subcategory: '' } : {}),
+              page: 1,
+            })}
+            aria-label={'Убрать фильтр: ' + label}
+          >
+            {label}
+            <span aria-hidden="true">✕</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 export function FilterUI({
   data,
   filters,

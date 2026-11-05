@@ -67,6 +67,22 @@ pnpm --version
 
 ## Docker
 
+Рекомендуемый локальный запуск без установки dependencies на host:
+
+```powershell
+pnpm dev:docker
+```
+
+Если установленный на компьютере pnpm не соответствует `engines` проекта,
+можно запустить только Docker launcher напрямую: `node scripts/local-start.mjs`.
+Это не отключает проверку engines приложения: Next.js, NestJS и проверки
+выполняются в Docker с закреплёнными Node.js и pnpm, а host Node.js только
+передаёт конфигурацию Docker.
+
+Команда собирает и запускает настоящие Web/API/DB/S3 на `http://localhost:3000`, не включает fixtures и не удаляет существующие volumes. При отсутствии root `.env` она использует credentials существующего QRG local DB container; для нового DB генерирует local-only пароль. Ключ proof между API и Web генерируется на запуск, если не настроен явно. Существующий MFA key читается из local API env без вывода в logs. Эти настройки не являются production deployment.
+
+Для прямой команды Compose ниже нужно отдельно передать случайный `QRG_INTERNAL_PROXY_SECRET` (одинаковый для Web и API), а также `POSTGRES_PASSWORD`.
+
 ```powershell
 # Собрать и запустить все приложения (локальная конфигурация).
 docker compose --profile app up -d --build --wait
@@ -210,3 +226,46 @@ pnpm billing:tick
 `billing:tick` требует регулярного запуска при deployment. HTTP-публичность дополнительно проверяет срок подписки независимо от задержки job. При billing suspension проверенный shop возвращается в VERIFIED; административный SUSPENDED никогда не снимается оплатой.
 
 [Архитектура и правила дат PHASE 7](docs/phase-7-architecture.md), [отчёт PHASE 7](docs/phase-7-report.md). Halyk не подключён. Следующий этап — только PHASE 7B по отдельной команде.
+
+## PHASE 8–10: Seller Experience, Mobile Wizard, Быстрое размещение, SEO и Инфраструктура
+
+- **Кабинет продавца и Быстрое размещение (`PHASE 8` + `quick-add`)**:
+  - Вкладки кабинета продавца (`/seller/[shopId]/...`): **Обзор**, **Быстрое размещение** (`/seller/[shopId]/quick-add`), **Добавить товар** (пошаговый мастер `/seller/[shopId]/products/new`), **Товары**, **Заявки**, **Магазин**, **Обучение (QRG Academy)**, **Подписка**.
+  - Вкладка **Быстрое размещение** позволяет на одном экране выбрать тип товара (**Сумка**, **Парфюмерия**, **Косметика**, **Одежда**, **Обувь**), загрузить фото (до 10 файлов, JPG/PNG/WebP, авто-обработка через `sharp` и S3), указать название, бренд, цену в KZT, цвета и размеры/объём с пресетами под выбранную категорию и сразу опубликовать карточку.
+- **Админ-центр (`PHASE 8B`)**:
+  - Полноценный Admin Control Center (`/admin`) с TOTP 2FA, ролями (`SUPER_ADMIN`, `MODERATION_ADMIN`, `SUPPORT_ADMIN`, `FINANCE_ADMIN`), управлением бутиками, товарами, пользователями, подписками и журналом аудита.
+- **Инфраструктура, Мониторинг и SEO (`PHASE 9–10`)**:
+  - Контейнеризация в `Dockerfile`, локальный и preview стек в `compose.yaml`, `compose.host.yaml`, `compose.preview.yaml`.
+  - Инфраструктура как код (Terraform для Yandex Cloud KZ `kz1-a`) в `infra/terraform/yc-kz` и Kubernetes-манифесты в `infra/k8s/production`.
+  - Закрытый SEO-режим по умолчанию (`QRG_PUBLIC_INDEXING_ENABLED=false`, `X-Robots-Tag: noindex, nofollow`) и приватные аналитические события.
+
+## Структура репозитория
+
+```text
+qrg-market/
+├── .github/workflows/ci.yml      # CI/CD пайплайн (Format, Lint, Typecheck, Tests, DB, Smoke, Docker)
+├── apps/
+│   ├── api/                      # Backend: NestJS 12, Drizzle ORM, PostgreSQL 17, S3 Media, Auth/MFA
+│   │   ├── drizzle/              # SQL-миграции базы данных (0000..0009)
+│   │   ├── src/                  # Модули API (auth, admin, catalog, seller, media, requests, subscriptions)
+│   │   └── test/                 # Unit, HTTP и DB-интеграционные тесты API
+│   └── web/                      # Frontend: Next.js 16.3.4 App Router, React 19, TypeScript
+│       ├── app/                  # Маршруты витрины, кабинета продавца (/seller), админ-панели (/admin)
+│       ├── components/           # UI-компоненты витрины, кабинета продавца и админ-центра
+│       ├── lib/                  # Серверные адаптеры, нормализация, аналитика, SEO, безопасность
+│       └── test/                 # Unit, smoke и preview-тесты фронтенда
+├── docs/                         # Архитектурная и эксплуатационная документация (PHASE 0–10, Runbooks)
+├── infra/                        # Конфигурация PostgreSQL, Kubernetes и Terraform (Yandex Cloud KZ)
+├── scripts/                      # Скрипты запуска (local-start.mjs), проверок целостности и smoke-тестов
+├── COLLABORATION.md              # Инструкция по совместной разработке (GitHub, Antigravity, VS Code)
+├── CONTRIBUTING.md               # Правила внесения изменений, ветвления, код-ревью и безопасности
+├── DEPLOYMENT.md                 # Инструкция по закрытому хостингу, деплою, бэкапам и автообновлению
+├── compose.yaml                  # Основной Docker Compose стек (PostgreSQL + PostGIS, SeaweedFS S3, API, Web)
+└── package.json                  # Корневой манифест pnpm-монорепозитория
+```
+
+## Документация для команды
+
+- [COLLABORATION.md](COLLABORATION.md) — полная инструкция по совместной работе в GitHub, Antigravity и VS Code (включая пошаговый гайд для второго разработчика).
+- [DEPLOYMENT.md](DEPLOYMENT.md) — руководство по закрытой публикации сайта, настройке сервера, базы данных, S3, HTTPS и автоматического обновления.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — регламент разработки, правила безопасности, проверок и Pull Requests.

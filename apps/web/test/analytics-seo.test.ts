@@ -3,6 +3,49 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { indexingEnabled, jsonLd, pageMetadata } from '../lib/seo.ts';
 import { allowedSellerRoute } from '../lib/seller/boundary.ts';
+import {
+  contentSecurityPolicy,
+  strictTransportSecurity,
+  validRequestNonce,
+} from '../lib/security-headers.ts';
+
+test('production CSP uses a request nonce and HSTS stays behind verified HTTPS configuration', () => {
+  const nonce = Buffer.from('fixed-test-nonce-value').toString('base64');
+  const csp = contentSecurityPolicy(
+    nonce,
+    'production',
+    'https://media.qrg.example.test',
+  );
+  for (const directive of [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    "style-src 'self' 'nonce-",
+    'img-src',
+    'font-src',
+    'connect-src',
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ])
+    assert.ok(csp.includes(directive), directive);
+  assert.ok(csp.includes('https://media.qrg.example.test'));
+  assert.ok(!csp.includes("'unsafe-eval'"));
+  assert.ok(!csp.includes(' *'));
+  assert.equal(validRequestNonce(nonce), nonce);
+  assert.equal(validRequestNonce("bad'; script-src *"), undefined);
+  assert.equal(
+    strictTransportSecurity('production', 'true', 'https://qrg.example.test'),
+    'max-age=31536000',
+  );
+  assert.equal(
+    strictTransportSecurity('production', 'false', 'https://qrg.example.test'),
+    null,
+  );
+  assert.throws(() =>
+    strictTransportSecurity('production', 'true', 'http://qrg.example.test'),
+  );
+});
 
 test('indexing requires explicit production launch, trusted HTTPS origin and live API', () => {
   const keys = [

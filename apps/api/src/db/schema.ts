@@ -931,6 +931,10 @@ export const customerRequests = pgTable(
     status: customerRequestStatus('status').notNull().default('NEW'),
     submissionHash: text('submission_hash').notNull(),
     dedupHash: text('dedup_hash').notNull(),
+    legalHold: boolean('legal_hold').notNull().default(false),
+    personalDataErasedAt: timestamp('personal_data_erased_at', {
+      withTimezone: true,
+    }),
     statusChangedBy: uuid('status_changed_by').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -955,6 +959,9 @@ export const customerRequests = pgTable(
     index('requests_variant_idx').on(t.variantId),
     index('requests_actor_idx').on(t.statusChangedBy),
     index('requests_dedup_idx').on(t.dedupHash, t.createdAt),
+    index('requests_retention_idx')
+      .on(t.createdAt, t.id)
+      .where(sql`${t.legalHold} = false AND ${t.personalDataErasedAt} IS NULL`),
     uniqueIndex('requests_submission_unique').on(t.submissionHash),
     check(
       'requests_name_valid',
@@ -977,6 +984,10 @@ export const customerRequests = pgTable(
     check(
       'requests_hashes_valid',
       sql`${t.submissionHash} ~ '^[0-9a-f]{64}$' AND ${t.dedupHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'requests_retention_state_valid',
+      sql`${t.personalDataErasedAt} IS NULL OR ${t.legalHold} = false`,
     ),
   ],
 );

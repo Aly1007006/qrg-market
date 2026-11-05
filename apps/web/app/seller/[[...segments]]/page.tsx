@@ -17,9 +17,26 @@ import {
   ShopBranding,
 } from '../../../components/seller/onboarding';
 import { ImageManager } from '../../../components/seller/image-manager';
+import { shopStatusLabel } from '../../../lib/moderation';
+import { MarketIcon } from '../../../components/market-icons';
+import { ShopNotice } from '../../../components/seller/shop-notice';
+
+const sectionIcons = [
+  'chart',
+  'bag',
+  'bag',
+  'message',
+  'chart',
+  'card',
+  'store',
+  'users',
+  'settings',
+  'book',
+] as const;
 
 const sections = [
   ['', 'Обзор'],
+  ['quick-add', 'Быстрое размещение'],
   ['products', 'Товары'],
   ['requests', 'Заявки'],
   ['statistics', 'Статистика'],
@@ -56,11 +73,23 @@ export default async function Page({
         <p className="eyebrow">QRG BUSINESS</p>
         <h1>Ваши магазины</h1>
         <p>{string(user.email)}</p>
-        <div className="seller-list">
+        <div className="seller-row">
+          <p className="muted">
+            Ваш ID для приглашения в магазин: <code>{string(user.id)}</code>
+          </p>
+          <SellerForm
+            path="auth/logout"
+            csrf={csrf}
+            label="Выйти"
+            redirectTo="/seller/login"
+          />
+        </div>
+        <div className="seller-list seller-shops">
           {shops.map((shop) => (
             <Link key={string(shop.id)} href={'/seller/' + string(shop.id)}>
               <h2>{string(shop.name)}</h2>
-              <Badge>{string(shop.status)}</Badge>
+              <Badge>{shopStatusLabel(string(shop.status))}</Badge>
+              <span className="seller-shop-open">Открыть кабинет →</span>
             </Link>
           ))}
         </div>
@@ -70,7 +99,11 @@ export default async function Page({
             каталоге.
           </p>
         )}
-        <h2>Новый магазин</h2>
+        <h2>Добавить магазин</h2>
+        <p className="muted">
+          Начните с названия. Адрес, контакты и оформление можно заполнить в
+          кабинете.
+        </p>
         <SellerForm
           csrf={csrf}
           path="shops"
@@ -83,6 +116,7 @@ export default async function Page({
             },
           ]}
           label="Создать магазин"
+          successMessage="Магазин создан. Нажмите «Открыть кабинет» на его карточке выше, чтобы добавить адрес и товары."
         />
       </>
     );
@@ -137,6 +171,10 @@ export default async function Page({
     content = (
       <>
         <h2>Безопасность аккаунта</h2>
+        <p className="muted">
+          Здесь можно выйти из аккаунта или завершить вход на другом устройстве.
+          Это не удалит магазин и товары.
+        </p>
         <p>Email: {string(user.email)}</p>
         <p>
           Ваш ID для добавления в магазин: <code>{string(user.id)}</code>
@@ -149,6 +187,10 @@ export default async function Page({
         {sessions.map((s) => (
           <div key={string(s.id)} className="seller-row">
             <span>
+              <strong>
+                {s.id === me.sessionId ? 'Текущее устройство' : 'Другой вход'}
+              </strong>
+              {' · '}
               Сессия до {new Date(string(s.expiresAt)).toLocaleString('ru-RU')}
             </span>
             <SellerForm
@@ -156,6 +198,9 @@ export default async function Page({
               method="DELETE"
               csrf={csrf}
               label="Завершить сессию"
+              {...(s.id === me.sessionId
+                ? { redirectTo: '/seller/login' }
+                : {})}
             />
           </div>
         ))}
@@ -191,14 +236,9 @@ export default async function Page({
     content = (
       <>
         <p>
-          Статус: <Badge>{string(shop.status)}</Badge>. Публикация зависит от
-          проверки и подписки.
+          Статус: <Badge>{shopStatusLabel(string(shop.status))}</Badge>.
+          Публикация зависит от проверки и подписки.
         </p>
-        <SellerVerification
-          shopId={shopId}
-          status={string(shop.status)}
-          csrf={csrf}
-        />
         <ShopBranding
           shopId={shopId}
           csrf={csrf}
@@ -213,7 +253,9 @@ export default async function Page({
             string(shop.status),
           )}
           className="verification-fields"
+          id="shop-details"
         >
+          <legend>Сведения о магазине</legend>
           <SellerForm
             path={base}
             method="PATCH"
@@ -229,11 +271,16 @@ export default async function Page({
             ]}
           />
           <h2>Адрес и контакты</h2>
+          <p className="muted">
+            Сохраняйте каждый блок отдельно. Для проверки нужны адрес и хотя бы
+            один телефон.
+          </p>
           <SellerForm
             path={base + '/location'}
             method="PUT"
             csrf={csrf}
             numeric={['latitude', 'longitude']}
+            label="Сохранить адрес и 2GIS"
             fields={[
               {
                 name: 'address',
@@ -241,6 +288,8 @@ export default async function Page({
                 value: text(location.address),
                 required: true,
                 maxLength: 300,
+                placeholder: 'Караганда, улица, дом, этаж и номер бутика',
+                hint: 'Укажите, как покупателю найти ваш магазин.',
               },
               {
                 name: 'mall',
@@ -255,16 +304,29 @@ export default async function Page({
                 value: text(location.twoGisUrl),
                 nullable: true,
                 maxLength: 300,
+                type: 'url',
+                hint: 'Откройте карточку своего магазина в 2GIS и скопируйте полную HTTPS-ссылку. Ссылки на другие сайты не подходят.',
               },
               {
                 name: 'latitude',
                 label: 'Широта (необязательно)',
+                type: 'number',
+                advanced: true,
+                min: -90,
+                max: 90,
+                step: 'any',
+                hint: 'Для кнопки 2GIS координаты не нужны. Если не знаете — оставьте пустым.',
                 value:
                   location.latitude == null ? '' : Number(location.latitude),
               },
               {
                 name: 'longitude',
                 label: 'Долгота (необязательно)',
+                type: 'number',
+                advanced: true,
+                min: -180,
+                max: 180,
+                step: 'any',
                 value:
                   location.longitude == null ? '' : Number(location.longitude),
               },
@@ -274,10 +336,14 @@ export default async function Page({
             path={base + '/contacts'}
             method="PUT"
             csrf={csrf}
+            label="Сохранить телефоны"
             fields={[
               {
                 name: 'phone',
                 label: 'Телефон',
+                type: 'tel',
+                placeholder: '+7 700 000 00 00',
+                hint: 'Номер магазина с кодом страны. Не указывайте чужие номера.',
                 value: text(contacts.phone),
                 nullable: true,
                 maxLength: 40,
@@ -285,6 +351,9 @@ export default async function Page({
               {
                 name: 'whatsappPhone',
                 label: 'WhatsApp',
+                type: 'tel',
+                placeholder: '+7 700 000 00 00',
+                hint: 'Номер, на который покупатель сможет написать в WhatsApp.',
                 value: text(contacts.whatsappPhone),
                 nullable: true,
                 maxLength: 40,
@@ -292,6 +361,11 @@ export default async function Page({
             ]}
           />
         </fieldset>
+        <SellerVerification
+          shopId={shopId}
+          status={string(shop.status)}
+          csrf={csrf}
+        />
       </>
     );
   } else if (section === 'employees') {
@@ -308,7 +382,13 @@ export default async function Page({
           <div className="seller-row" key={string(m.id)}>
             <div>
               <code>{string(m.userId)}</code>
-              <p>{string(m.role)}</p>
+              <p>
+                {m.role === 'SHOP_OWNER'
+                  ? 'Владелец'
+                  : m.role === 'SHOP_MANAGER'
+                    ? 'Менеджер'
+                    : 'Сотрудник'}
+              </p>
             </div>
             {m.role !== 'SHOP_OWNER' && (
               <>
@@ -336,22 +416,31 @@ export default async function Page({
           </div>
         ))}
         <h2>Добавить сотрудника</h2>
+        <p className="muted">
+          Менеджер: товары, заявки, контент и статистика. Сотрудник: товары,
+          наличие и заявки. Подписка и управление командой остаются у владельца.
+        </p>
         <SellerForm
           path={base + '/members'}
           csrf={csrf}
           fields={[
-            { name: 'userId', label: 'ID пользователя', required: true },
+            {
+              name: 'userId',
+              label: 'ID аккаунта сотрудника',
+              required: true,
+              hint: 'Попросите сотрудника зарегистрироваться, открыть «Ваши магазины» и передать свой ID для приглашения. Это не ID магазина и не email.',
+            },
             { name: 'role', label: 'Роль', options: roles },
           ]}
         />
       </>
     );
-  } else if (section === 'products' && detail) {
+  } else if (section === 'quick-add' || (section === 'products' && detail)) {
     const categories = array(await sellerRead('public/categories')).map((v) => {
       const c = record(v);
       return { id: string(c.id), name: string(c.name) };
     });
-    if (detail === 'new') {
+    if (section === 'quick-add' || detail === 'new') {
       const query = await searchParams;
       const draft =
         typeof query.draft === 'string' &&
@@ -397,13 +486,32 @@ export default async function Page({
       content = (
         <>
           <p>
-            <Badge>{string(p.status)}</Badge>
+            <Badge>
+              {p.status === 'DRAFT'
+                ? 'Черновик — скрыт'
+                : p.status === 'ARCHIVED'
+                  ? 'В архиве'
+                  : shop.status === 'ACTIVE'
+                    ? 'Опубликован'
+                    : 'Готов к публикации — магазин пока скрыт'}
+            </Badge>
           </p>
+          <nav
+            className="seller-section-links"
+            aria-label="Разделы редактирования товара"
+          >
+            <Link href="#product-details">Данные и цена</Link>
+            <Link href="#product-variants">Варианты и наличие</Link>
+            <Link href="#product-images">Фотографии ({images.length}/10)</Link>
+            <Link href={href + '/products'}>← Все товары</Link>
+          </nav>
+          <h2 id="product-details">Данные и цена</h2>
           <SellerForm
             path={path}
             method="PUT"
             csrf={csrf}
             numeric={['basePrice', 'oldPrice']}
+            label="Сохранить данные товара"
             fields={[
               {
                 name: 'brandId',
@@ -435,6 +543,7 @@ export default async function Page({
               },
               {
                 name: 'description',
+                type: 'textarea',
                 label: 'Описание',
                 value: string(p.description),
                 maxLength: 10000,
@@ -458,6 +567,7 @@ export default async function Page({
               {
                 name: 'oldPrice',
                 label: 'Прежняя цена, ₸',
+                hint: 'Необязательно. Для скидки прежняя цена должна быть выше текущей; иначе оставьте поле пустым.',
                 type: 'number',
                 value: p.oldPrice == null ? '' : Number(p.oldPrice),
               },
@@ -467,13 +577,19 @@ export default async function Page({
                 value: string(p.status),
                 options: [
                   { value: 'DRAFT', label: 'Черновик' },
-                  { value: 'PUBLISHED', label: 'Опубликован' },
+                  {
+                    value: 'PUBLISHED',
+                    label:
+                      shop.status === 'ACTIVE'
+                        ? 'Опубликован'
+                        : 'Готов к публикации (магазин пока скрыт)',
+                  },
                   { value: 'ARCHIVED', label: 'В архиве' },
                 ],
               },
             ]}
           />
-          <h2>Варианты и наличие</h2>
+          <h2 id="product-variants">Варианты и наличие</h2>
           <p>
             Магазин отвечает за актуальность наличия. QRG не резервирует
             складской остаток.
@@ -496,9 +612,22 @@ export default async function Page({
           <SellerForm
             path={path + '/variants'}
             csrf={csrf}
+            label="Добавить вариант"
             fields={[
-              { name: 'size', label: 'Размер', required: true, maxLength: 40 },
-              { name: 'color', label: 'Цвет', required: true, maxLength: 40 },
+              {
+                name: 'size',
+                label: 'Размер',
+                required: true,
+                maxLength: 40,
+                placeholder: 'M, 42 или Без размера',
+              },
+              {
+                name: 'color',
+                label: 'Цвет',
+                required: true,
+                maxLength: 40,
+                placeholder: 'Например: чёрный',
+              },
             ]}
           />
           <ImageManager
@@ -515,7 +644,12 @@ export default async function Page({
     }
   } else if (section === 'products') {
     content = (
-      <SellerProducts shopId={shopId} csrf={csrf} query={await searchParams} />
+      <SellerProducts
+        shopId={shopId}
+        csrf={csrf}
+        shopStatus={string(shop.status)}
+        query={await searchParams}
+      />
     );
   } else {
     const q = await searchParams;
@@ -569,24 +703,29 @@ export default async function Page({
   }
   return (
     <>
-      <Link href="/seller">← Все магазины</Link>
+      <div className="seller-breadcrumb">
+        <Link href="/seller">← Все магазины</Link>
+        <span>Кабинет продавца</span>
+      </div>
       <div className="seller-shell">
         <aside>
           <p className="eyebrow">QRG BUSINESS</p>
           <h2>{string(shop.name)}</h2>
+          <Badge>{shopStatusLabel(string(shop.status))}</Badge>
           <nav aria-label="Кабинет продавца">
-            {sections.map(([key, label]) => (
+            {sections.map(([key, label], index) => (
               <Link
                 key={key}
                 aria-current={section === key ? 'page' : undefined}
                 href={href + (key ? '/' + key : '')}
               >
+                <MarketIcon name={sectionIcons[index] ?? 'bag'} size={18} />
                 {label}
               </Link>
             ))}
           </nav>
         </aside>
-        <section>
+        <section className="seller-content">
           <h1>
             {detail === 'new'
               ? 'Новый товар'
@@ -596,6 +735,11 @@ export default async function Page({
                   : 'Редактирование товара'
                 : sections.find(([key]) => key === section)?.[1]}
           </h1>
+          <ShopNotice
+            shopId={shopId}
+            status={string(shop.status)}
+            role={string(shop.role)}
+          />
           {content}
         </section>
       </div>

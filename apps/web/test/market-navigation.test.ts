@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { departmentLinks } from '../lib/market-navigation.ts';
 
 test('reference departments preserve order and use search when taxonomy is unavailable', () => {
@@ -30,4 +31,36 @@ test('department links use existing taxonomy without mutating it or injecting UR
   assert.equal(cosmetics.searchParams.has('shop'), false);
   assert.equal(cosmetics.hash, '');
   assert.equal(categories.length, 2);
+});
+
+test('compact public controls keep a 44px touch target at mobile widths', () => {
+  const css = readFileSync('components/market.module.css', 'utf8');
+  for (const selector of [
+    '.topActions a',
+    '.headerActions a,',
+    '.categoryNav a',
+    '.headerSearchStyle :global(.search input)',
+    '.searchWrap :global(.search .button)',
+    '.sectionHeading > a',
+    '.shopIdentity > div > a',
+    '.shopButtons :global(.button)',
+    '.footerBrand',
+    '.footer nav a',
+    '.mobileMenu :global(.button)',
+  ]) {
+    const start = css.indexOf(selector);
+    assert.ok(start >= 0, selector);
+    assert.match(css.slice(start, start + 260), /min-height:\s*44px/);
+  }
+  const globalCss = readFileSync('app/globals.css', 'utf8');
+  for (const selector of [
+    '.breadcrumbs a',
+    '.category-pills a',
+    '.text-link',
+    '.search input',
+  ]) {
+    const start = globalCss.indexOf(selector);
+    assert.ok(start >= 0, selector);
+    assert.match(globalCss.slice(start, start + 260), /min-height:\s*44px/);
+  }
 });

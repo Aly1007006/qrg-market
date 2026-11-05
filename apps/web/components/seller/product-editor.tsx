@@ -50,6 +50,66 @@ const steps = [
   'Наличие',
   'Предпросмотр',
 ];
+const PRODUCT_TYPES = [
+  {
+    id: 'clothing',
+    label: 'Одежда',
+    hint: 'Пальто, платья, костюмы, базовый гардероб',
+    categoryName: 'Женщинам',
+    placeholder: 'Например: Шерстяное пальто свободного кроя',
+    sizeLabel: 'Размер одежды',
+    sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  },
+  {
+    id: 'shoes',
+    label: 'Обувь',
+    hint: 'Лоферы, кроссовки, ботильоны, туфли',
+    categoryName: 'Обувь',
+    placeholder: 'Например: Кожаные лоферы ручной работы',
+    sizeLabel: 'Размер обуви',
+    sizes: ['36', '37', '38', '39', '40', '41', '42', '43', '44'],
+  },
+  {
+    id: 'bag',
+    label: 'Сумка / Аксессуар',
+    hint: 'Сумки, клатчи, ремни, очки, украшения',
+    categoryName: 'Аксессуары',
+    placeholder: 'Например: Кожаная сумка кросс-боди',
+    sizeLabel: 'Формат / размер',
+    sizes: ['Без размера', 'Mini', 'Medium', 'Large'],
+  },
+  {
+    id: 'perfume',
+    label: 'Парфюмерия',
+    hint: 'Парфюмерная вода, духи, селективные ароматы',
+    categoryName: 'Красота',
+    placeholder: 'Например: Парфюмерная вода Woody Amber',
+    sizeLabel: 'Объём флакона',
+    sizes: ['30 мл', '50 мл', '100 мл', 'Набор'],
+  },
+  {
+    id: 'cosmetics',
+    label: 'Косметика',
+    hint: 'Уход за лицом и телом, декоративная косметика',
+    categoryName: 'Красота',
+    placeholder: 'Например: Сыворотка с пептидами и гиалуроновой кислотой',
+    sizeLabel: 'Объём / формат',
+    sizes: ['Стандарт', '15 мл', '30 мл', '50 мл', 'Набор'],
+  },
+] as const;
+const QUICK_COLORS = [
+  'Чёрный',
+  'Белый',
+  'Бежевый',
+  'Коричневый',
+  'Серый',
+  'Золотой',
+  'Розовый',
+  'Синий',
+  'Зелёный',
+  'Прозрачный',
+] as const;
+type ProductTypeId = (typeof PRODUCT_TYPES)[number]['id'];
 type SavedDraft = {
   id: string;
   version: number;
@@ -463,14 +523,106 @@ export function ProductEditor({
       setBusy(false);
     }
   }
+  const [productType, setProductType] = useState<ProductTypeId>('clothing');
+  const activeType =
+    PRODUCT_TYPES.find((t) => t.id === productType) ?? PRODUCT_TYPES[0];
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((previous) => ({ ...previous, [key]: value }));
+  const selectProductType = (typeId: ProductTypeId) => {
+    setProductType(typeId);
+    const preset = PRODUCT_TYPES.find((t) => t.id === typeId);
+    if (!preset) return;
+    const matchedCat = categories.find((c) => c.name === preset.categoryName);
+    setForm((previous) => ({
+      ...previous,
+      categoryId: matchedCat ? matchedCat.id : previous.categoryId,
+      variants:
+        previous.variants.length > 0
+          ? previous.variants
+          : [
+              {
+                size: preset.sizes[0] ?? '',
+                color: '',
+                sku: '',
+                priceOverride: '',
+                available: true,
+              },
+            ],
+    }));
+  };
+  const applyQuickSize = (size: string) => {
+    setForm((previous) => {
+      if (previous.variants.length === 0) {
+        return {
+          ...previous,
+          variants: [
+            { size, color: '', sku: '', priceOverride: '', available: true },
+          ],
+        };
+      }
+      const lastIndex = previous.variants.length - 1;
+      const last = previous.variants[lastIndex]!;
+      if (!last.size || last.size === size) {
+        return {
+          ...previous,
+          variants: previous.variants.map((v, i) =>
+            i === lastIndex ? { ...v, size } : v,
+          ),
+        };
+      }
+      if (previous.variants.length >= 100) return previous;
+      return {
+        ...previous,
+        variants: [
+          ...previous.variants,
+          {
+            size,
+            color: last.color,
+            sku: '',
+            priceOverride: '',
+            available: true,
+          },
+        ],
+      };
+    });
+  };
+  const applyQuickColor = (color: string) => {
+    setForm((previous) => {
+      if (previous.variants.length === 0) {
+        return {
+          ...previous,
+          variants: [
+            {
+              size: activeType.sizes[0] ?? '',
+              color,
+              sku: '',
+              priceOverride: '',
+              available: true,
+            },
+          ],
+        };
+      }
+      const lastIndex = previous.variants.length - 1;
+      return {
+        ...previous,
+        variants: previous.variants.map((v, i) =>
+          i === lastIndex ? { ...v, color } : v,
+        ),
+      };
+    });
+  };
   const visible = (n: number) =>
-    mode === 'quick' ? [0, 1, 2, 4].includes(n) : step === n;
+    mode === 'quick' ? [0, 1, 2, 3, 4, 5].includes(n) : step === n;
   if (done)
     return (
       <div className="seller-form">
-        <h2>{done.published ? 'Товар опубликован' : 'Черновик сохранён'}</h2>
+        <h2>
+          {done.published
+            ? shopStatus === 'ACTIVE'
+              ? 'Товар опубликован'
+              : 'Товар сохранён — магазин пока скрыт'
+            : 'Черновик сохранён'}
+        </h2>
         {shopStatus !== 'ACTIVE' && (
           <p>
             В каталоге товар появится после проверки магазина и активации
@@ -479,7 +631,7 @@ export function ProductEditor({
         )}
         <a
           className="button button-primary"
-          href={'/seller/' + shopId + '/products/new'}
+          href={'/seller/' + shopId + '/quick-add'}
         >
           Добавить ещё товар
         </a>
@@ -502,14 +654,14 @@ export function ProductEditor({
           variant={mode === 'quick' ? 'primary' : 'secondary'}
           onClick={() => setMode('quick')}
         >
-          Быстрое добавление
+          Быстрое размещение карточки
         </Button>
         <Button
           type="button"
           variant={mode === 'full' ? 'primary' : 'secondary'}
           onClick={() => setMode('full')}
         >
-          Полное добавление
+          Пошаговое добавление
         </Button>
       </div>
       {existingProductId ? (
@@ -548,13 +700,47 @@ export function ProductEditor({
         disabled={!ready || busy || Boolean(existingProductId)}
         className="editor-fields"
       >
+        {mode === 'quick' && (
+          <section className="seller-form">
+            <h2>1. Что за товар вы размещаете?</h2>
+            <p className="muted">
+              Выберите тип товара — система автоматически подберёт нужную
+              категорию и удобную размерную сетку (размеры одежды, обуви или
+              объём флакона).
+            </p>
+            <div
+              className="quick-type-grid"
+              role="group"
+              aria-label="Тип товара"
+            >
+              {PRODUCT_TYPES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={
+                    'quick-type-card' +
+                    (productType === t.id ? ' quick-type-card-active' : '')
+                  }
+                  aria-pressed={productType === t.id}
+                  onClick={() => selectProductType(t.id)}
+                >
+                  <strong>{t.label}</strong>
+                  <span>{t.hint}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
         {visible(0) && (
           <section>
-            <h2>Фотографии</h2>
+            <h2>
+              {mode === 'quick'
+                ? '2. Фотографии карточки товара'
+                : 'Фотографии'}
+            </h2>
             <p>
-              Добавьте 3–5 качественных фотографий товара. Первая фотография
-              будет основной. До публикации фотографии сохраняются только в этом
-              браузере.
+              Добавьте 1–5 качественных фотографий товара. Первая фотография
+              станет обложкой карточки в каталоге.
             </p>
             <div
               className="photo-drop"
@@ -655,17 +841,18 @@ export function ProductEditor({
         )}
         {visible(1) && (
           <section className="seller-form">
-            <h2>О товаре</h2>
+            <h2>{mode === 'quick' ? '3. О товаре' : 'О товаре'}</h2>
             <Input
               id="editor-name"
               label="Название товара"
+              placeholder={activeType.placeholder}
               maxLength={200}
               value={form.name}
               onChange={(e) => update('name', e.target.value)}
             />
             <Select
               id="editor-category"
-              label="Категория"
+              label="Категория витрины"
               value={form.categoryId}
               onChange={(e) => update('categoryId', e.target.value)}
             >
@@ -676,38 +863,35 @@ export function ProductEditor({
                 </option>
               ))}
             </Select>
-            {mode === 'full' && (
-              <>
-                <Select
-                  id="editor-brand"
-                  label="Бренд — необязательно"
-                  value={form.brandId}
-                  onChange={(e) => update('brandId', e.target.value)}
-                >
-                  <option value="">Без бренда</option>
-                  {brands.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </Select>
-                <label className="field" htmlFor="editor-description">
-                  Описание — необязательно
-                  <textarea
-                    id="editor-description"
-                    maxLength={10000}
-                    rows={4}
-                    value={form.description}
-                    onChange={(e) => update('description', e.target.value)}
-                  />
-                </label>
-              </>
-            )}
+            <Select
+              id="editor-brand"
+              label="Бренд — необязательно"
+              value={form.brandId}
+              onChange={(e) => update('brandId', e.target.value)}
+            >
+              <option value="">Без бренда</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </Select>
+            <label className="field" htmlFor="editor-description">
+              Описание товара — необязательно
+              <textarea
+                id="editor-description"
+                placeholder="Состав, материал, особенности посадки или ноты аромата…"
+                maxLength={10000}
+                rows={3}
+                value={form.description}
+                onChange={(e) => update('description', e.target.value)}
+              />
+            </label>
           </section>
         )}
         {visible(2) && (
           <section className="seller-form">
-            <h2>Цена</h2>
+            <h2>{mode === 'quick' ? '4. Цена и скидка' : 'Цена'}</h2>
             <Input
               id="editor-price"
               label="Цена, ₸"
@@ -716,29 +900,64 @@ export function ProductEditor({
               min={0}
               max={99999999.99}
               step="0.01"
+              placeholder="Например: 45000"
               value={form.basePrice}
               onChange={(e) => update('basePrice', e.target.value)}
             />
-            {mode === 'full' && (
-              <Input
-                id="editor-old-price"
-                label="Старая цена — необязательно, ₸"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={99999999.99}
-                step="0.01"
-                value={form.oldPrice}
-                onChange={(e) => update('oldPrice', e.target.value)}
-              />
-            )}
+            <Input
+              id="editor-old-price"
+              label="Старая цена до скидки — необязательно, ₸"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={99999999.99}
+              step="0.01"
+              placeholder="Например: 59000"
+              value={form.oldPrice}
+              onChange={(e) => update('oldPrice', e.target.value)}
+            />
           </section>
         )}
         {visible(3) && (
           <section className="seller-form">
-            <h2>Размеры и цвета — необязательно</h2>
+            <h2>
+              {mode === 'quick'
+                ? '5. Размер / объём и цвет'
+                : 'Размеры и цвета — необязательно'}
+            </h2>
+            <div className="quick-chips-block">
+              <p className="muted">
+                Нажмите, чтобы быстро подставить{' '}
+                <strong>{activeType.sizeLabel.toLowerCase()}</strong>:
+              </p>
+              <div className="quick-chips">
+                {activeType.sizes.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    className="quick-chip"
+                    onClick={() => applyQuickSize(size)}
+                  >
+                    + {size}
+                  </button>
+                ))}
+              </div>
+              <p className="muted">Быстрый выбор цвета или оттенка:</p>
+              <div className="quick-chips">
+                {QUICK_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className="quick-chip"
+                    onClick={() => applyQuickColor(color)}
+                  >
+                    {color}
+                  </button>
+                ))}
+              </div>
+            </div>
             {form.variants.map((v, index) => (
-              <fieldset key={index}>
+              <fieldset key={index} className="variant-fieldset">
                 <legend>Вариант {index + 1}</legend>
                 {(['size', 'color', 'sku', 'priceOverride'] as const).map(
                   (key) => (
@@ -747,11 +966,18 @@ export function ProductEditor({
                       id={'variant-' + index + key}
                       label={
                         {
-                          size: 'Размер',
-                          color: 'Цвет',
-                          sku: 'Внутренний код товара — необязательно',
+                          size: activeType.sizeLabel,
+                          color: 'Цвет / оттенок',
+                          sku: 'Артикул (SKU) — необязательно',
                           priceOverride: 'Цена варианта, ₸ — необязательно',
                         }[key]
+                      }
+                      placeholder={
+                        key === 'size'
+                          ? (activeType.sizes[0] ?? 'M, 38 или 100 мл')
+                          : key === 'color'
+                            ? 'Например: Чёрный'
+                            : undefined
                       }
                       value={v[key]}
                       maxLength={key === 'sku' ? 100 : 40}
@@ -816,13 +1042,13 @@ export function ProductEditor({
                 ])
               }
             >
-              Добавить размер / цвет
+              Добавить ещё размер / цвет
             </Button>
           </section>
         )}
         {visible(4) && (
           <section>
-            <h2>Наличие</h2>
+            <h2>{mode === 'quick' ? '6. Наличие' : 'Наличие'}</h2>
             <Select
               id="editor-availability"
               label="Наличие товара"
@@ -840,7 +1066,7 @@ export function ProductEditor({
         )}
         {visible(5) && (
           <section>
-            <h2>Так товар увидит покупатель</h2>
+            <h2>Так карточку товара увидит покупатель</h2>
             <article className="editor-preview">
               {previews[0] && (
                 <Image
@@ -851,10 +1077,20 @@ export function ProductEditor({
                   unoptimized
                 />
               )}
+              <span className="badge badge-sand">{activeType.label}</span>
               <h3>{form.name || 'Название товара'}</h3>
               <strong>
                 {Number(form.basePrice).toLocaleString('ru-RU')} ₸
               </strong>
+              {form.variants.length > 0 && (
+                <p className="muted">
+                  Варианты:{' '}
+                  {form.variants
+                    .map((v) => [v.size, v.color].filter(Boolean).join(' · '))
+                    .filter(Boolean)
+                    .join(', ') || 'Стандартный'}
+                </p>
+              )}
               <p>{form.description}</p>
               <p>{form.available ? 'В наличии' : 'Нет в наличии'}</p>
             </article>

@@ -3,6 +3,7 @@ import {
   apiOrigin,
   sessionCookie,
 } from '../../../../lib/seller/boundary';
+import { internalClientHeaders } from '../../../../lib/internal-client';
 export const runtime = 'nodejs';
 async function proxy(
   request: Request,
@@ -36,25 +37,6 @@ async function proxy(
   const maximum = upload ? 10 * 1024 * 1024 + 65536 : 32768;
   if (Number(request.headers.get('content-length') ?? 0) > maximum)
     return fail(413);
-  const headers = new Headers({
-    cookie: sessionCookie(request.headers.get('cookie')),
-  });
-  if (unsafe) {
-    headers.set('origin', trustedOrigin);
-    headers.set('x-qrg-client', 'web');
-    headers.set('content-type', type);
-    headers.set('x-qrg-csrf', request.headers.get('x-qrg-csrf') ?? '');
-    if (upload && request.headers.has('x-qrg-upload-id')) {
-      const uploadId = request.headers.get('x-qrg-upload-id') ?? '';
-      if (
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-          uploadId,
-        )
-      )
-        return fail(400);
-      headers.set('x-qrg-upload-id', uploadId);
-    }
-  }
   const query = new URL(request.url).searchParams;
   if (
     [...query.keys()].some(
@@ -63,6 +45,26 @@ async function proxy(
   )
     return fail(400);
   try {
+    const headers = new Headers({
+      cookie: sessionCookie(request.headers.get('cookie')),
+      ...internalClientHeaders(request),
+    });
+    if (unsafe) {
+      headers.set('origin', trustedOrigin);
+      headers.set('x-qrg-client', 'web');
+      headers.set('content-type', type);
+      headers.set('x-qrg-csrf', request.headers.get('x-qrg-csrf') ?? '');
+      if (upload && request.headers.has('x-qrg-upload-id')) {
+        const uploadId = request.headers.get('x-qrg-upload-id') ?? '';
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            uploadId,
+          )
+        )
+          return fail(400);
+        headers.set('x-qrg-upload-id', uploadId);
+      }
+    }
     // Stream with a hard byte budget, including chunked requests. Never buffer multipart in Next.
     let bytes = 0;
     const body =

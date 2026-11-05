@@ -8,6 +8,8 @@ import { Badge, Button, EmptyState } from '../../../components/ui';
 import { TwoGisLink } from '../../../components/two-gis-link';
 import styles from '../../../components/market.module.css';
 import { AnalyticsView } from '../../../components/analytics';
+import { FavoriteButton } from '../../../components/favorites';
+import { requestNonce } from '../../../lib/nonce';
 type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Props) {
   const { shop } = await readShop((await params).slug);
@@ -19,6 +21,7 @@ export async function generateMetadata({ params }: Props) {
 }
 export default async function ShopPage({ params }: Props) {
   const { shop, data } = await readShop((await params).slug);
+  const nonce = await requestNonce();
   const whatsapp =
     shop.demo === false &&
     shop.whatsappPhone &&
@@ -32,6 +35,7 @@ export default async function ShopPage({ params }: Props) {
         <>
           <AnalyticsView resource="shop" slug={shop.slug} />
           <script
+            nonce={nonce}
             type="application/ld+json"
             dangerouslySetInnerHTML={{
               __html: jsonLd({
@@ -57,7 +61,7 @@ export default async function ShopPage({ params }: Props) {
       <nav className="breadcrumbs" aria-label="Хлебные крошки">
         <Link href="/">Главная</Link>
         <span aria-hidden="true">/</span>
-        <Link href="/#shops">Бутики</Link>
+        <Link href="/shops">Бутики</Link>
         <span aria-hidden="true">/</span>
         <span>{shop.name}</span>
       </nav>
@@ -100,6 +104,13 @@ export default async function ShopPage({ params }: Props) {
             <Badge>Демо-магазин · не верифицирован</Badge>
           )}
           <h1>{shop.name}</h1>
+          <FavoriteButton
+            kind="shop"
+            slug={shop.slug}
+            name={shop.name}
+            scope={shop.demo === false ? 'live' : 'demo'}
+            inline
+          />
           <p className="eyebrow">{shop.category}</p>
           <p>{shop.description}</p>
         </div>

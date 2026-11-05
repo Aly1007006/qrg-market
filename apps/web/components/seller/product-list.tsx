@@ -27,10 +27,12 @@ export function ProductList({
   rows,
   shopId,
   csrf,
+  shopStatus,
 }: {
   rows: SellerProductRow[];
   shopId: string;
   csrf: string;
+  shopStatus: string;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -185,7 +187,9 @@ export function ProductList({
                 <p>
                   {row.categoryName} ·{' '}
                   {row.available ? 'В наличии' : 'Нет в наличии'} ·{' '}
-                  {statuses[row.status]}
+                  {row.status === 'PUBLISHED' && shopStatus !== 'ACTIVE'
+                    ? 'Готов к публикации — магазин скрыт'
+                    : statuses[row.status]}
                 </p>
                 <p className="muted">
                   Просмотры за 30 дней: {row.views} · Изменено{' '}

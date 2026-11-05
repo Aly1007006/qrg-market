@@ -2,13 +2,7 @@ import Link from 'next/link';
 import { sellerRead } from '../../lib/seller/server';
 import { array, record, string } from '../../lib/catalogue/contract';
 import { SellerForm } from './forms';
-const labels: Record<string, string> = {
-  ACTIVE: 'Активна',
-  PAST_DUE: 'Платёж не прошёл',
-  GRACE: 'Льготный период',
-  SUSPENDED: 'Приостановлена',
-  CANCELLED: 'Отменена',
-};
+import { subscriptionLabel } from '../../lib/seller/guidance';
 const date = (value: unknown) =>
   value
     ? new Date(string(value)).toLocaleString('ru-RU', {
@@ -39,7 +33,11 @@ export async function SellerSubscription({
   return (
     <section aria-label="Подписка магазина">
       <h2>QRG BUSINESS · 10 000 ₸ / месяц</h2>
-      <p>{s ? labels[string(s.status)] : 'Подписка ещё не оформлена'}</p>
+      <p>
+        {s
+          ? subscriptionLabel(string(s.status), s.periodStart)
+          : 'Подписка ещё не оформлена'}
+      </p>
       <p>
         Оплата доступа к QRG — не оплата товаров покупателей. Пробный период
         выключен.
@@ -48,7 +46,8 @@ export async function SellerSubscription({
         <SellerForm
           path={path}
           csrf={csrf}
-          label="Создать подписку без оплаты"
+          label="Подготовить подписку — без списания денег"
+          successMessage="Подписка подготовлена, но ещё не оплачена. Магазин пока скрыт."
         />
       )}
       {s && (

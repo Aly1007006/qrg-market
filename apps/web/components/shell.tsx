@@ -6,6 +6,7 @@ import { MarketIcon } from './market-icons';
 import { CategoryNav } from './market-navigation';
 import type { Category } from '../lib/catalogue/model';
 import styles from './market.module.css';
+import { FavoritesLink } from './favorites';
 export function TopBar() {
   return (
     <div className={styles.topBar}>
@@ -28,7 +29,13 @@ export function TopBar() {
     </div>
   );
 }
-export function Header({ categories }: { categories: readonly Category[] }) {
+export function Header({
+  categories,
+  demo = false,
+}: {
+  categories: readonly Category[];
+  demo?: boolean;
+}) {
   return (
     <>
       <a className="skip-link" href="#main-content">
@@ -54,15 +61,7 @@ export function Header({ categories }: { categories: readonly Category[] }) {
           className={styles.headerActions}
           aria-label="Личный кабинет и каталог"
         >
-          <button
-            type="button"
-            disabled
-            className={styles.favoritesLink}
-            title="Избранное пока недоступно"
-          >
-            <MarketIcon name="heart" />
-            <span>Избранное</span>
-          </button>
+          <FavoritesLink scope={demo ? 'demo' : 'live'} />
           <Link
             className={styles.catalogIcon}
             href="/catalog"
@@ -72,18 +71,20 @@ export function Header({ categories }: { categories: readonly Category[] }) {
           </Link>
           <Link
             className={styles.login}
-            href="/seller/login"
-            title="Войти в кабинет продавца"
+            href="/seller"
+            aria-label="Открыть кабинет продавца"
+            title="Открыть кабинет продавца"
           >
             <MarketIcon name="user" />
-            <span>Войти</span>
+            <span>Кабинет</span>
           </Link>
         </nav>
         <div className={styles.mobileMenu}>
           <MobileDrawer title="Меню" trigger="Меню">
             <nav className="drawer-nav" aria-label="Мобильная навигация">
               <Link href="/catalog">Каталог</Link>
-              <Link href="/#shops">Бутики</Link>
+              <Link href="/shops">Бутики</Link>
+              <FavoritesLink scope={demo ? 'demo' : 'live'} />
               <Link href="/catalog?sort=new">Новинки</Link>
               <Link href="/catalog?discount=true">Скидки</Link>
               <Link href="/seller">Кабинет продавца</Link>
@@ -104,7 +105,7 @@ export function Footer() {
         </Link>
         <nav aria-label="Навигация в подвале">
           <Link href="/catalog">Каталог</Link>
-          <Link href="/#shops">Бутики города</Link>
+          <Link href="/shops">Бутики города</Link>
           <Link href="/#how-it-works">Как работает QRG</Link>
           <Link href="/privacy/requests">Конфиденциальность</Link>
           <Link href="/seller">Кабинет продавца</Link>

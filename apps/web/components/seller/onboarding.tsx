@@ -21,17 +21,18 @@ export async function SellerOnboarding({
     whatsapp: 'Добавлен WhatsApp',
     twoGis: 'Добавлен 2GIS',
     firstProduct: 'Добавлен первый товар',
-    fiveProducts: 'Добавлено минимум 5 товаров',
+    fiveProducts: '5 товаров для более полной витрины — рекомендация',
   };
   const href = '/seller/' + shopId;
   const owner = role === 'SHOP_OWNER';
+  const percent = Math.min(100, Math.max(0, Number(data.percent) || 0));
   return (
     <section>
       {owner && !data.skipped && !data.completed && (
         <>
           <h2>Добро пожаловать в QRG MARKET</h2>
           <p>Настроим ваш бутик за несколько минут.</p>
-          <ol>
+          <ol className="onboarding-steps">
             <li>
               <Link href={href + '/shop'}>Заполните информацию о магазине</Link>
             </li>
@@ -63,19 +64,38 @@ export async function SellerOnboarding({
       )}
       <h2>Подготовьте магазин к покупателям</h2>
       <p>
-        Магазин заполнен на {Number(data.percent)}%. Это готовность оформления
-        магазина.
+        Готовность оформления: <strong>{percent}%</strong>
       </p>
       <progress
         max={100}
-        value={Number(data.percent)}
+        value={percent}
         aria-label="Готовность оформления магазина"
       />
-      <ul>
+      <p className="muted">
+        Это чек-лист оформления, а не разрешение на публикацию. Проверка
+        магазина и подписка оцениваются отдельно.
+      </p>
+      <ul className="onboarding-checklist">
         {Object.entries(labels).map(([key, label]) => (
-          <li key={key}>
-            {checklist[key] ? '✓ ' : '○ '}
-            {label}
+          <li key={key} data-complete={checklist[key] === true}>
+            <span aria-hidden="true">{checklist[key] ? '✓' : '○'}</span>
+            <span>
+              <Link
+                href={
+                  href +
+                  (['firstProduct', 'fiveProducts'].includes(key)
+                    ? '/products'
+                    : ['logo', 'cover'].includes(key)
+                      ? '/shop#branding'
+                      : '/shop#shop-details')
+                }
+              >
+                {label}
+              </Link>
+              <span className="sr-only">
+                {checklist[key] ? ' — выполнено' : ' — ещё не выполнено'}
+              </span>
+            </span>
           </li>
         ))}
       </ul>
@@ -93,7 +113,7 @@ export async function SellerOnboarding({
       {data.status === 'ACTIVE' ? (
         <Link href={'/shop/' + string(data.shopSlug)}>Открыть свой бутик</Link>
       ) : (
-        <p>
+        <p className="onboarding-notice">
           Бутик ещё скрыт от покупателей. В разделе «Магазин» проверьте данные и
           отправьте его на проверку; публичность также зависит от действующей
           подписки.

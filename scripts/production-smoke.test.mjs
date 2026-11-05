@@ -46,6 +46,8 @@ test('production Next.js serves public shell without fixtures and preserves secu
         NEXT_TELEMETRY_DISABLED: '1',
         QRG_DEV_FIXTURES: 'true',
         QRG_API_ORIGIN: '',
+        QRG_APP_ORIGIN: 'https://qrg.example.test',
+        QRG_HSTS_ENABLED: 'true',
         QRG_SITE_URL: 'https://qrg.example.test',
       },
     },
@@ -63,6 +65,25 @@ test('production Next.js serves public shell without fixtures and preserves secu
     assert.match(html, /noindex/);
     assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(response.headers.get('x-powered-by'), null);
+    const csp = response.headers.get('content-security-policy') ?? '';
+    assert.match(csp, /default-src 'self'/);
+    assert.match(csp, /script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+    assert.match(csp, /frame-ancestors 'none'/);
+    assert.match(csp, /object-src 'none'/);
+    assert.ok(!csp.includes("'unsafe-eval'"));
+    assert.ok(!csp.includes(' *'));
+    const hsts = response.headers.get('strict-transport-security') ?? '';
+    assert.equal(hsts, 'max-age=31536000');
+    assert.ok(!hsts.includes('preload'));
+    const nonce = csp.match(/'nonce-([^']+)'/)?.[1];
+    assert.ok(nonce);
+    const scripts = [...html.matchAll(/<script\b([^>]*)>/g)];
+    assert.ok(scripts.length > 0);
+    for (const script of scripts)
+      assert.match(script[1], new RegExp(`nonce=["']${nonce}["']`));
+    const second = await fetch('http://127.0.0.1:43180');
+    const secondCsp = second.headers.get('content-security-policy') ?? '';
+    assert.notEqual(secondCsp.match(/'nonce-([^']+)'/)?.[1], nonce);
     assert.match(html, /rel="canonical" href="https:\/\/qrg\.example\.test\/"/);
     const catalog = await fetch('http://127.0.0.1:43180/catalog');
     assert.equal(catalog.status, 200);
@@ -99,6 +120,8 @@ test('compiled production API boots, serves health and hides Swagger', async () 
       SWAGGER_ENABLED: 'false',
       APP_ORIGIN: 'https://qrg.example',
       AUTH_RATE_LIMIT_SECRET: 'test-rate-limit-secret-at-least-32-characters',
+      INTERNAL_PROXY_SECRET:
+        'test-internal-proxy-secret-at-least-32-characters',
     },
   });
   try {

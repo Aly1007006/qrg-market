@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { adminPermissions } from '../src/admin/auth.js';
@@ -162,4 +163,25 @@ void test('bulk product actions require unique bounded IDs and finite action enu
       (await validate(plainToInstance(BulkProductDto, body), validation))
         .length,
     );
+});
+void test('production isolates runtime and migration secrets and documents least-privilege database roles', () => {
+  const security = readFileSync(
+    '../../infra/terraform/environments/production/security.tf',
+    'utf8',
+  );
+  const runbook = readFileSync(
+    '../../docs/operations/database-roles.md',
+    'utf8',
+  );
+  assert.match(security, /resource "yandex_lockbox_secret" "migration"/);
+  assert.match(
+    security,
+    /resource "yandex_lockbox_secret_iam_member" "migration_runtime"[^}]*secret_id = yandex_lockbox_secret\.migration\.id/,
+  );
+  assert.doesNotMatch(
+    security,
+    /resource "yandex_lockbox_secret_iam_member" "migration_runtime"[^}]*secret_id = yandex_lockbox_secret\.application\.id/,
+  );
+  assert.match(runbook, /REVOKE CREATE ON SCHEMA public FROM PUBLIC/);
+  assert.match(runbook, /REVOKE UPDATE, DELETE, TRUNCATE ON audit_logs/);
 });

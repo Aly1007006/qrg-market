@@ -405,7 +405,7 @@ void describe(
       const result = await database.client.execute<{ count: string }>(
         sql`SELECT count(*)::text AS count FROM drizzle.__drizzle_migrations`,
       );
-      assert.equal(result.rows[0]?.count, '13');
+      assert.equal(result.rows[0]?.count, '14');
       assert.equal((await request('/health/ready')).status, 200);
     });
     void test('signup normalizes email, hashes Argon2id, returns identical duplicate response and no session', async () => {
