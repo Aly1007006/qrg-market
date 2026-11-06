@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input, Button, Select } from '../ui';
+import { moderationReasonTemplatesFor } from '../../lib/moderation';
 export async function mutate(
   path: string,
   body: unknown,
@@ -149,6 +150,8 @@ export function AdminDecisionForm({
   const [action, setAction] = useState(actions[0]?.value ?? '');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [reason, setReason] = useState('');
+  const templates = moderationReasonTemplatesFor(action);
   if (!actions.length)
     return <p>Нет доступных решений для этого статуса и ваших прав.</p>;
   return (
@@ -156,7 +159,6 @@ export function AdminDecisionForm({
       className="seller-form"
       onSubmit={async (e) => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget);
         setBusy(true);
         setMessage('');
         try {
@@ -166,7 +168,7 @@ export function AdminDecisionForm({
               action,
               expectedStatus: status,
               caseId,
-              reason: data.get('reason'),
+              reason,
             },
             csrf,
           );
@@ -183,7 +185,10 @@ export function AdminDecisionForm({
         id="admin-decision"
         label="Решение"
         value={action}
-        onChange={(e) => setAction(e.target.value)}
+        onChange={(e) => {
+          setAction(e.target.value);
+          setReason('');
+        }}
       >
         {actions.map((a) => (
           <option key={a.value} value={a.value}>
@@ -191,6 +196,23 @@ export function AdminDecisionForm({
           </option>
         ))}
       </Select>
+      {templates.length > 0 && (
+        <label className="field" htmlFor="admin-reason-template">
+          <span>Шаблон причины</span>
+          <select
+            id="admin-reason-template"
+            defaultValue=""
+            onChange={(e) => setReason(e.target.value)}
+          >
+            <option value="">Написать причину вручную</option>
+            {templates.map((template) => (
+              <option key={template} value={template}>
+                {template}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="field" htmlFor="admin-reason">
         <span>
           Причина, которую увидит продавец
@@ -202,6 +224,8 @@ export function AdminDecisionForm({
           maxLength={2000}
           rows={4}
           required={action !== 'APPROVE'}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
         />
       </label>
       <label className="request-consent">
