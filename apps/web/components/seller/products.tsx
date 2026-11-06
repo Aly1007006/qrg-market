@@ -3,6 +3,7 @@ import { sellerRead } from '../../lib/seller/server';
 import { array, record, string } from '../../lib/catalogue/contract';
 import { Input, Select, Button } from '../ui';
 import { ProductList, type SellerProductRow } from './product-list';
+import { ProductCsvImport } from './product-csv-import';
 export async function SellerProducts({
   shopId,
   csrf,
@@ -24,6 +25,7 @@ export async function SellerProducts({
     await sellerRead('shops/' + shopId + '/products?' + parameters),
   ).map(record);
   const categories = array(await sellerRead('public/categories')).map(record);
+  const brands = array(await sellerRead('public/brands?limit=100')).map(record);
   const drafts = array(await sellerRead('shops/' + shopId + '/product-drafts'))
     .map(record)
     .filter((draft) => !draft.productId);
@@ -37,9 +39,23 @@ export async function SellerProducts({
   };
   return (
     <>
-      <Link className="button button-primary" href={href + '/new'}>
-        Добавить товар
-      </Link>
+      <div className="seller-row">
+        <Link className="button button-primary" href={href + '/new'}>
+          Добавить товар
+        </Link>
+        <ProductCsvImport
+          shopId={shopId}
+          csrf={csrf}
+          categories={categories.map((category) => ({
+            id: string(category.id),
+            name: string(category.name),
+          }))}
+          brands={brands.map((brand) => ({
+            id: string(brand.id),
+            name: string(brand.name),
+          }))}
+        />
+      </div>
       {drafts.length > 0 && (
         <details>
           <summary>
