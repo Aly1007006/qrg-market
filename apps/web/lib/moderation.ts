@@ -9,6 +9,26 @@ export const shopStatuses = [
 ];
 export const shopStatusLabel = (v: string) =>
   shopStatuses.find((s) => s.value === v)?.label ?? v;
+const moderationReasonTemplates: Record<string, readonly string[]> = {
+  REQUEST_CHANGES: [
+    'Уточните или дополните контакты магазина.',
+    'Добавьте адрес и ссылку на карточку магазина в 2GIS.',
+    'Загрузите логотип, обложку и фотографии товаров без чужих водяных знаков.',
+    'Исправьте описание магазина: укажите ассортимент и условия работы.',
+  ],
+  REJECT: [
+    'Сведения о магазине не удалось подтвердить. Проверьте контакты и подайте заявку повторно.',
+    'Магазин не соответствует правилам размещения QRG MARKET.',
+  ],
+  SUSPEND: [
+    'Магазин временно скрыт до уточнения информации и устранения нарушения правил.',
+    'Требуется подтвердить актуальность ассортимента, цен и контактов.',
+  ],
+  RESTORE: ['Проверка завершена: магазин восстановлен в кабинете продавца.'],
+};
+export function moderationReasonTemplatesFor(action: string) {
+  return moderationReasonTemplates[action] ?? [];
+}
 export function moderationActions(status: string, permissions: string[]) {
   const choices = [
     {

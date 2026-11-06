@@ -2,7 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { allowedAdminRoute, adminCookie } from '../lib/admin/boundary.ts';
 import { allowedSellerRoute } from '../lib/seller/boundary.ts';
-import { moderationActions } from '../lib/moderation.ts';
+import {
+  moderationActions,
+  moderationReasonTemplatesFor,
+} from '../lib/moderation.ts';
 test('admin BFF does not forward seller credentials or expose role/audit mutations', () => {
   const token = 'A'.repeat(43),
     id = '00000000-0000-4000-8000-000000000000';
@@ -36,4 +39,12 @@ test('UI moderation controls reflect explicit permissions and never expose ACTIV
     moderationActions('ACTIVE', ['moderation.suspend'])[0]?.value,
     'SUSPEND',
   );
+});
+
+test('moderation reasons provide reusable, editable-safe templates only for applicable decisions', () => {
+  assert.ok(moderationReasonTemplatesFor('REQUEST_CHANGES').length >= 3);
+  assert.ok(moderationReasonTemplatesFor('REJECT').length >= 1);
+  assert.ok(moderationReasonTemplatesFor('SUSPEND').length >= 1);
+  assert.deepEqual(moderationReasonTemplatesFor('APPROVE'), []);
+  assert.deepEqual(moderationReasonTemplatesFor('UNKNOWN'), []);
 });
