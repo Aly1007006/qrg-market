@@ -9,7 +9,7 @@
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "test": "node --test test/catalogue.test.ts test/catalogue-api.test.ts test/seller.test.ts test/requests.test.ts test/admin.test.ts test/market-navigation.test.ts test/analytics-seo.test.ts test/favorites.test.ts"
+    "test": "node --test test/catalogue.test.ts test/catalogue-api.test.ts test/seller.test.ts test/requests.test.ts test/admin.test.ts test/market-navigation.test.ts test/analytics-seo.test.ts test/favorites.test.ts test/csv-import.test.ts"
   },
   "dependencies": {
     "next": "16.4.1",
