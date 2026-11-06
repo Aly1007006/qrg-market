@@ -1,14 +1,14 @@
-'use client';
-import { useId, useState } from 'react';
-import { Button } from '../ui';
+"use client";
+import { useId, useState } from "react";
+import { Button } from "../ui";
 import {
   importedProductSlug,
   parseProductImport,
   productImportTemplate,
   type ImportOption,
   type ProductImportRow,
-} from '../../lib/seller/csv-import';
-import { mutate } from './forms';
+} from "../../lib/seller/csv-import";
+import { mutate } from "./forms";
 
 export function ProductCsvImport({
   shopId,
@@ -24,17 +24,17 @@ export function ProductCsvImport({
   const inputId = useId();
   const [rows, setRows] = useState<ProductImportRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   function downloadTemplate() {
     const url = URL.createObjectURL(
-      new Blob([productImportTemplate], { type: 'text/csv;charset=utf-8' }),
+      new Blob([productImportTemplate], { type: "text/csv;charset=utf-8" }),
     );
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.download = 'qrg-products-template.csv';
+    link.download = "qrg-products-template.csv";
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -42,30 +42,30 @@ export function ProductCsvImport({
   async function select(file: File | undefined) {
     setRows([]);
     setErrors([]);
-    setMessage('');
+    setMessage("");
     setConfirmed(false);
     if (!file) return;
     if (file.size > 256 * 1024) {
-      setErrors(['Файл больше 256 KB. Разделите его на несколько файлов.']);
+      setErrors(["Файл больше 256 KB. Разделите его на несколько файлов."]);
       return;
     }
     const result = parseProductImport(await file.text(), categories, brands);
     setRows(result.rows);
     setErrors(result.errors);
     if (!result.errors.length && result.rows.length)
-      setMessage('Проверьте строки и подтвердите создание черновиков.');
+      setMessage("Проверьте строки и подтвердите создание черновиков.");
   }
 
   async function submit() {
     if (!confirmed || !rows.length) return;
     setBusy(true);
-    setMessage('');
+    setMessage("");
     let created = 0;
     try {
       for (const row of rows) {
         await mutate(
-          'shops/' + shopId + '/products',
-          'POST',
+          "shops/" + shopId + "/products",
+          "POST",
           {
             name: row.name,
             slug: importedProductSlug(),
@@ -74,7 +74,7 @@ export function ProductCsvImport({
             description: row.description,
             basePrice: row.basePrice,
             oldPrice: row.oldPrice,
-            status: 'DRAFT',
+            status: "DRAFT",
             variants: [row.variant],
           },
           csrf,
@@ -83,11 +83,17 @@ export function ProductCsvImport({
       }
       setRows([]);
       setConfirmed(false);
-      setMessage('Создано черновиков: ' + created + '. Добавьте фотографии и проверьте данные перед публикацией.');
+      setMessage(
+        "Создано черновиков: " +
+          created +
+          ". Добавьте фотографии и проверьте данные перед публикацией.",
+      );
     } catch (error) {
       setMessage(
-        'Создано черновиков: ' + created + '. Остальные строки не добавлены: ' +
-          (error instanceof Error ? error.message : 'ошибка сервера.'),
+        "Создано черновиков: " +
+          created +
+          ". Остальные строки не добавлены: " +
+          (error instanceof Error ? error.message : "ошибка сервера."),
       );
     } finally {
       setBusy(false);
@@ -129,7 +135,7 @@ export function ProductCsvImport({
           <ol>
             {rows.slice(0, 10).map((row) => (
               <li key={row.line}>
-                {row.name} — {row.basePrice.toLocaleString('ru-RU')} ₸
+                {row.name} — {row.basePrice.toLocaleString("ru-RU")} ₸
               </li>
             ))}
           </ol>
@@ -142,8 +148,12 @@ export function ProductCsvImport({
             />
             <span>Я проверил данные. Создать товары как черновики.</span>
           </label>
-          <Button type="button" disabled={!confirmed || busy} onClick={() => void submit()}>
-            {busy ? 'Создаём черновики…' : 'Создать черновики'}
+          <Button
+            type="button"
+            disabled={!confirmed || busy}
+            onClick={() => void submit()}
+          >
+            {busy ? "Создаём черновики…" : "Создать черновики"}
           </Button>
         </>
       )}
