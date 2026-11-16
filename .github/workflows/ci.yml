@@ -6,7 +6,10 @@ permissions:
   contents: read
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    # Database integration checks are validated on Ubuntu 24.04. Keep the
+    # runner explicit so a future `ubuntu-latest` migration cannot silently
+    # change the PostgreSQL/Docker environment that the suite exercises.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: '1'
