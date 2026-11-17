@@ -46,6 +46,13 @@ jobs:
       - run: pnpm test
       - name: Start disposable PostgreSQL with PostGIS and pg_trgm
         run: docker compose --env-file .env.example -f compose.yaml -f compose.host.yaml up -d --build --wait db storage
+      - name: Provision the isolated test database
+        run: |
+          docker compose --env-file .env.example -f compose.yaml -f compose.host.yaml exec -T db sh -ec '
+            psql -U qrg_local -d qrg_market -tAc "SELECT 1 FROM pg_database WHERE datname = '\''qrg_market_test'\''" | grep -qx 1 || createdb -U qrg_local qrg_market_test
+            psql -v ON_ERROR_STOP=1 -U qrg_local -d qrg_market_test -c "CREATE EXTENSION IF NOT EXISTS postgis"
+            psql -v ON_ERROR_STOP=1 -U qrg_local -d qrg_market_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+          '
       - run: pnpm db:migrate
       - run: pnpm test:db
       - run: pnpm test:requests
