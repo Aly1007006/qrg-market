@@ -29,7 +29,10 @@ const optionalHeaders = [
   'sku',
   'available',
 ] as const;
-const allHeaders = new Set([...requiredHeaders, ...optionalHeaders]);
+const allHeaders: ReadonlySet<string> = new Set([
+  ...requiredHeaders,
+  ...optionalHeaders,
+]);
 
 function csvRows(text: string) {
   const rows: string[][] = [];
@@ -144,7 +147,7 @@ export function parseProductImport(
       const name = cell(values, 'name');
       const category = optionId(cell(values, 'category'), categories);
       const brandValue = cell(values, 'brand');
-      const brand = brandValue ? optionId(brandValue, brands) : null;
+      const brand = brandValue ? (optionId(brandValue, brands) ?? null) : null;
       const description = cell(values, 'description');
       const size = cell(values, 'size') || null;
       const color = cell(values, 'color') || null;
