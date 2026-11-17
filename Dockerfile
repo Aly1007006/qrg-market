@@ -34,7 +34,11 @@ FROM gcr.io/distroless/base-nossl-debian13:nonroot@sha256:e6b0f82595aa1edde72c80
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=base /usr/local/bin/node /nodejs/bin/node
-# Node.js requires these C++ runtime libraries; copy them explicitly instead of\n# inheriting the larger cc image (and its vulnerable zlib package).\nCOPY --from=base /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6\nCOPY --from=base /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/libgcc_s.so.1\nCOPY --from=api-dependencies --chown=65532:65532 /app/node_modules ./node_modules
+# Node.js requires these C++ runtime libraries; copy them explicitly instead of
+# inheriting the larger cc image (and its vulnerable zlib package).
+COPY --from=base /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /lib/x86_64-linux-gnu/libstdc++.so.6
+COPY --from=base /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/libgcc_s.so.1
+COPY --from=api-dependencies --chown=65532:65532 /app/node_modules ./node_modules
 COPY --from=api-dependencies --chown=65532:65532 /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build --chown=65532:65532 /app/apps/api/package.json ./apps/api/package.json
 COPY --from=build --chown=65532:65532 /app/apps/api/dist ./apps/api/dist
@@ -54,7 +58,11 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 WORKDIR /app
 COPY --from=base /usr/local/bin/node /nodejs/bin/node
-# Node.js requires these C++ runtime libraries; copy them explicitly instead of\n# inheriting the larger cc image (and its vulnerable zlib package).\nCOPY --from=base /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6\nCOPY --from=base /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/libgcc_s.so.1\nCOPY --from=build --chown=65532:65532 /app/apps/web/.next/standalone ./
+# Node.js requires these C++ runtime libraries; copy them explicitly instead of
+# inheriting the larger cc image (and its vulnerable zlib package).
+COPY --from=base /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /lib/x86_64-linux-gnu/libstdc++.so.6
+COPY --from=base /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/libgcc_s.so.1
+COPY --from=build --chown=65532:65532 /app/apps/web/.next/standalone ./
 COPY --from=build --chown=65532:65532 /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=65532:65532 /app/apps/web/public ./apps/web/public
 USER 65532:65532
