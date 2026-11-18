@@ -129,27 +129,89 @@ export async function ControlCenter({
   }
   if (section === 'overview') {
     const data = record(await adminRead('overview'));
-    const labels: Record<string, string> = {
-      shops: 'Всего бутиков',
-      active_shops: 'Активные бутики',
-      pending_shops: 'Ожидают проверки',
-      suspended_shops: 'Приостановленные бутики',
-      sellers: 'Продавцы',
-      products: 'Товары',
-      published_products: 'Опубликованные товары',
-      active_subscriptions: 'Активные подписки',
-      past_due: 'Просроченные подписки',
-      grace: 'Льготный период',
-      suspended_subscriptions: 'Приостановленные подписки',
-    };
+    const pending = Number(data.pending_shops);
+    const groups = [
+      {
+        title: 'Бутики',
+        href: '/admin/shops',
+        permission: 'moderation.read',
+        total: 'shops',
+        metrics: [
+          ['active_shops', 'Активные'],
+          ['suspended_shops', 'Приостановленные'],
+          ['sellers', 'Продавцы'],
+        ],
+      },
+      {
+        title: 'Товары',
+        href: '/admin/products',
+        permission: 'products.read',
+        total: 'products',
+        metrics: [['published_products', 'Опубликованные']],
+      },
+      {
+        title: 'Активные подписки',
+        href: '/admin/subscriptions',
+        permission: 'subscriptions.read',
+        total: 'active_subscriptions',
+        metrics: [
+          ['past_due', 'Просроченные'],
+          ['grace', 'В льготном периоде'],
+          ['suspended_subscriptions', 'Приостановленные'],
+        ],
+      },
+    ] as const;
+    const format = new Intl.NumberFormat('ru-RU');
     return (
-      <div className="analytics-metrics">
-        {Object.entries(labels).map(([key, label]) => (
-          <div key={key}>
-            <h2>{label}</h2>
-            <strong>{Number(data[key]).toLocaleString('ru-RU')}</strong>
+      <div className="admin-overview">
+        <section className="admin-queue">
+          <div>
+            <h2>Очередь модерации</h2>
+            <p>
+              {pending === 0
+                ? 'Новых заявок на проверку пока нет.'
+                : 'Откройте очередь, чтобы проверить заявки бутиков.'}
+            </p>
+            {permissions.includes('moderation.read') && (
+              <Link href="/admin/shops?status=PENDING_VERIFICATION">
+                Открыть очередь <span aria-hidden="true">→</span>
+              </Link>
+            )}
           </div>
-        ))}
+          <dl>
+            <dt>Ожидают проверки</dt>
+            <dd>{format.format(pending)}</dd>
+          </dl>
+        </section>
+        <div className="admin-overview-grid">
+          {groups.map(({ title, href, permission, total, metrics }) => (
+            <section className="admin-overview-card" key={total}>
+              <header>
+                <h2>{title}</h2>
+                <p>{format.format(Number(data[total]))}</p>
+              </header>
+              <dl>
+                {metrics.map(([key, label]) => (
+                  <div key={key}>
+                    <dt>{label}</dt>
+                    <dd>{format.format(Number(data[key]))}</dd>
+                  </div>
+                ))}
+              </dl>
+              {permissions.includes(permission) && (
+                <Link href={href}>
+                  {total === 'active_subscriptions'
+                    ? 'Все подписки'
+                    : 'Открыть раздел'}{' '}
+                  <span aria-hidden="true">→</span>
+                  {total !== 'active_subscriptions' && (
+                    <span className="sr-only"> «{title}»</span>
+                  )}
+                </Link>
+              )}
+            </section>
+          ))}
+        </div>
       </div>
     );
   }

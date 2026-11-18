@@ -365,7 +365,10 @@ export default async function Page({
           <div>
             <p className="admin-kicker">Рабочий стол</p>
             <h2>Контроль состояния платформы</h2>
-            <p>Сначала проверяйте новые заявки, затем следите за статусами бутиков.</p>
+            <p>
+              Сначала проверяйте новые заявки, затем следите за статусами
+              бутиков.
+            </p>
           </div>
           <Link
             className="button button-primary"
@@ -376,7 +379,11 @@ export default async function Page({
         </div>
         <div className="admin-status-grid">
           {shopStatuses.map((s) => (
-            <Link className="admin-status-card" key={s.value} href={'/admin/shops?status=' + s.value}>
+            <Link
+              className="admin-status-card"
+              key={s.value}
+              href={'/admin/shops?status=' + s.value}
+            >
               <span>{s.label}</span>
               <strong>
                 {Number(counts.find((c) => c.status === s.value)?.count ?? 0)}
@@ -398,30 +405,70 @@ export default async function Page({
         <p className="admin-session-status">Сессия активна</p>
       </div>
       <nav className="admin-nav" aria-label="Разделы администрирования">
-        <Link aria-current={!section ? 'page' : undefined} href="/admin">Обзор</Link>
+        <Link aria-current={!section ? 'page' : undefined} href="/admin">
+          Обзор
+        </Link>
         {permissions.includes('moderation.read') && (
-          <Link aria-current={section === 'shops' ? 'page' : undefined} href="/admin/shops">Бутики</Link>
+          <Link
+            aria-current={section === 'shops' ? 'page' : undefined}
+            href="/admin/shops"
+          >
+            Бутики
+          </Link>
         )}
         {permissions.includes('users.read') && (
-          <Link aria-current={section === 'users' ? 'page' : undefined} href="/admin/users">Пользователи</Link>
+          <Link
+            aria-current={section === 'users' ? 'page' : undefined}
+            href="/admin/users"
+          >
+            Пользователи
+          </Link>
         )}
         {permissions.includes('products.read') && (
-          <Link aria-current={section === 'products' ? 'page' : undefined} href="/admin/products">Товары</Link>
+          <Link
+            aria-current={section === 'products' ? 'page' : undefined}
+            href="/admin/products"
+          >
+            Товары
+          </Link>
         )}
         {permissions.includes('subscriptions.read') && (
-          <Link aria-current={section === 'subscriptions' ? 'page' : undefined} href="/admin/subscriptions">Подписки</Link>
+          <Link
+            aria-current={section === 'subscriptions' ? 'page' : undefined}
+            href="/admin/subscriptions"
+          >
+            Подписки
+          </Link>
         )}
         {permissions.includes('admins.write') && (
-          <Link aria-current={section === 'administrators' ? 'page' : undefined} href="/admin/administrators">Администраторы</Link>
+          <Link
+            aria-current={section === 'administrators' ? 'page' : undefined}
+            href="/admin/administrators"
+          >
+            Администраторы
+          </Link>
         )}
-        <Link aria-current={section === 'settings' ? 'page' : undefined} href="/admin/settings">Настройки</Link>
+        <Link
+          aria-current={section === 'settings' ? 'page' : undefined}
+          href="/admin/settings"
+        >
+          Настройки
+        </Link>
         {permissions.includes('moderation.read') && (
-          <Link className="admin-nav-attention" href="/admin/shops?status=PENDING_VERIFICATION">
+          <Link
+            className="admin-nav-attention"
+            href="/admin/shops?status=PENDING_VERIFICATION"
+          >
             Ожидают проверки
           </Link>
         )}
         {permissions.includes('audit.read') && (
-          <Link aria-current={section === 'audit' ? 'page' : undefined} href="/admin/audit">Аудит</Link>
+          <Link
+            aria-current={section === 'audit' ? 'page' : undefined}
+            href="/admin/audit"
+          >
+            Аудит
+          </Link>
         )}
       </nav>
       <p className="admin-session-note">
