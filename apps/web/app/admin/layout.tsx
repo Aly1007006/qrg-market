@@ -6,8 +6,14 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <main id="main-content" className="container seller-area admin-area">
-      <p className="eyebrow">QRG MARKET / ADMIN AREA</p>
-      {children}
+      <header className="admin-masthead">
+        <div>
+          <p className="eyebrow">QRG MARKET / ADMIN AREA</p>
+          <p className="admin-masthead-copy">Управление платформой</p>
+        </div>
+        <span className="admin-secure-mark">Защищённый доступ</span>
+      </header>
+      <div className="admin-shell">{children}</div>
     </main>
   );
 }
